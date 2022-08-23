@@ -144,14 +144,15 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+
   MX_DMA_Init();
-	MX_ADC1_Init();
+  MX_ADC1_Init();
   MX_I2C1_Init();
   MX_RTC_Init();
   MX_SPI1_Init();
   MX_SPI3_Init();
   MX_TIM1_Init();
-	MX_USART1_UART_Init();
+  MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
@@ -724,7 +725,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(SC200R_EN_GPIO_Port, SC200R_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, PULSE_EN_Pin|XL355_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(XL355_EN_GPIO_Port, XL355_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SC200R_PW_EN_GPIO_Port, SC200R_PW_EN_Pin, GPIO_PIN_SET);
@@ -825,12 +826,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(XL355_SYNC_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PULSE_EN_Pin */
-  GPIO_InitStruct.Pin = PULSE_EN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(PULSE_EN_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin : GPS_1PPS_Pin */
+  GPIO_InitStruct.Pin = GPS_1PPS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPS_1PPS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : XL355_EN_Pin */
   GPIO_InitStruct.Pin = XL355_EN_Pin;

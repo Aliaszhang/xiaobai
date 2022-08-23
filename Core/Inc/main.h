@@ -109,8 +109,8 @@ void Error_Handler(void);
 #define XL355_INT1_EXTI_IRQn EXTI15_10_IRQn
 #define XL355_SYNC_Pin GPIO_PIN_12
 #define XL355_SYNC_GPIO_Port GPIOC
-#define PULSE_EN_Pin GPIO_PIN_2
-#define PULSE_EN_GPIO_Port GPIOD
+#define GPS_1PPS_Pin GPIO_PIN_2
+#define GPS_1PPS_GPIO_Port GPIOD
 #define XL355_EN_Pin GPIO_PIN_3
 #define XL355_EN_GPIO_Port GPIOD
 #define SC200R_PW_EN_Pin GPIO_PIN_6
