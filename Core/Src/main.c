@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "ubx.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -74,6 +74,7 @@ uint8_t spi_send_array_bak[ARRAYSIZE+20] = {0};
 uint8_t spi_read_reg_array[12] = {0}; 
 
 int gpio_int_flag = 0;
+int pps_count = 0;
 
 int msg_len = 0;
 uint8_t print_msg[256] = {0};
@@ -83,6 +84,7 @@ uint8_t print_msg[256] = {0};
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_USART1_UART_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
@@ -90,13 +92,13 @@ static void MX_RTC_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_TIM1_Init(void);
-static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void get_chip_serial_num(void);
 void get_chip_memery_info(void);
 void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len);
+int adxl355_start_work(void);
 float adxl355_conversion_acc_data(uint8_t *data);
 float adxl355_conversion_temperature(uint8_t *data);
 uint32_t adler32(uint8_t *buf, uint32_t len);
@@ -108,6 +110,10 @@ char *my_basename(char *s);
 int log_print(void);
 void HAL_RTC_GetTime_and_Date(RTC_DateTypeDef *s_date, RTC_TimeTypeDef *s_time);
 void HAL_RTC_SetTime_and_Date(RTC_DateTypeDef *s_data, RTC_TimeTypeDef *s_time);
+
+int ubx_reset(void);
+int ubx_init(void);
+int ubx_msg_generate(uint8_t msg_class, uint8_t msg_id, const unsigned char *data, uint16_t data_len, uint8_t *buf, uint16_t buf_len);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -144,7 +150,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
@@ -170,10 +175,21 @@ int main(void)
 	/* printf sdram and flash size */
 	PRINT_INFO("The Flash size:%uKBytes, SRAM size:%uKBytes\r\n", (int_device_memery_info & 0xFFFF), (int_device_memery_info >> 16 & 0xFFFF));
 
-	HAL_Delay(100);
-	
-  adxl355_init(XL355_RANGE_2G, XL355_ODR_500HZ, XL355_FIFO_SAMPLE_63);
+  ubx_reset();
+  HAL_Delay(100);  // wait for UBX start work, then send the message
+	ubx_init();
 	log_print();
+  adxl355_init(XL355_RANGE_2G, XL355_ODR_500HZ, XL355_FIFO_SAMPLE_63);
+  while(pps_count < 10)
+	{
+		HAL_Delay(500);
+	}
+  PRINT_INFO("ubx finish pps sync\r\n");
+  //HAL_GPIO_DeInit(GPS_1PPS_GPIO_Port, GPS_1PPS_Pin);
+  adxl355_start_work();
+  HAL_GPIO_WritePin(GPS_EN_GPIO_Port, GPS_EN_Pin, GPIO_PIN_RESET);
+	log_print();
+
 	int count = 0;
 	int pack_count = 0;
 	uint32_t adler32_check_sum = 0;
@@ -828,7 +844,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : GPS_1PPS_Pin */
   GPIO_InitStruct.Pin = GPS_1PPS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPS_1PPS_GPIO_Port, &GPIO_InitStruct);
 
@@ -847,6 +863,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(SC200R_PW_EN_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
@@ -982,42 +1001,6 @@ int spi_write_multipe_bytes(uint8_t start_addr, uint8_t *txdata, uint8_t len)
 
 void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len)
 {    
-    
-    spi_write_byte(XL355_RESET, 0x52);
-    spi_write_byte(XL355_RANGE, range); // 0xC1
-	  spi_write_byte(XL355_FIFO_SAMPLES, fifo_len); // 0x3F: 63: 7x9
-    spi_write_byte(XL355_INT_MAP, 0x02); // FULL_EN1
-    spi_write_byte(XL355_FILTER, odr); // 2000hz
-    spi_write_byte(XL355_SYNC, 0x00);
-//    spi_write_byte(XL355_SELF_TEST, 0x03);
-
-	  uint8_t tmp;
-    tmp = spi_read_byte(XL355_RANGE);
-    if (tmp != range)
-    {
-        PRINT_WARN("xl355 range set fail(%x:%x)\r\n", range, tmp);
-    }
-    tmp = spi_read_byte(XL355_SYNC);
-    if (tmp != 0x00)
-    {
-        PRINT_WARN("xl355 sync set fail(%x:%x)\r\n", 0x00, tmp);
-    }
-    tmp = spi_read_byte(XL355_FILTER);
-    if (tmp != odr)
-    {
-        PRINT_WARN("xl355 odr set fail(%x:%x)\r\n", odr, tmp);
-    }
-    tmp = spi_read_byte(XL355_FIFO_SAMPLES);
-    if (tmp != fifo_len)
-    {
-        PRINT_WARN("xl355 fifo samples set fail(%x:%x)\r\n", fifo_len, tmp);
-    }
-    tmp = spi_read_byte(XL355_INT_MAP);
-    if (tmp != 0x02)
-    {
-        PRINT_WARN("xl355 int_map set fail(%x:%x)\r\n", 0x02, tmp);
-    }
-
     if (spi_read_byte(XL355_PARTID) != 0xED)
     {
         PRINT_ERROR("adxl355 read register failed\r\n");
@@ -1030,13 +1013,56 @@ void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len)
         REVID = spi_read_byte(XL355_REVID);
         PRINT_INFO("adxl355 ADIID:%u, MEMSID:%u, REVID:%u\r\n", DEVID_AD, DEVID_MST, REVID);
 
-        uint8_t pwrctl = spi_read_byte(XL355_POWER_CTL);
-        pwrctl &= 0xFE;
+        spi_write_byte(XL355_RESET, 0x52);
+        spi_write_byte(XL355_RANGE, range); // 0xC1
+        spi_write_byte(XL355_FIFO_SAMPLES, fifo_len); // 0x3F: 63: 7x9
+        spi_write_byte(XL355_INT_MAP, 0x02); // FULL_EN1
+        spi_write_byte(XL355_FILTER, odr); // 2000hz
+        spi_write_byte(XL355_SYNC, 0x01);
+    //    spi_write_byte(XL355_SELF_TEST, 0x03);
 
-        spi_write_byte(XL355_POWER_CTL,pwrctl);
-        pwrctl = spi_read_byte(XL355_POWER_CTL);
-        return;
+        uint8_t tmp;
+        tmp = spi_read_byte(XL355_RANGE);
+        if (tmp != range)
+        {
+            PRINT_WARN("xl355 range set fail(%x:%x)\r\n", range, tmp);
+        }
+        tmp = spi_read_byte(XL355_SYNC);
+        if (tmp != 0x01)
+        {
+            PRINT_WARN("xl355 sync set fail(%x:%x)\r\n", 0x01, tmp);
+        }
+        tmp = spi_read_byte(XL355_FILTER);
+        if (tmp != odr)
+        {
+            PRINT_WARN("xl355 odr set fail(%x:%x)\r\n", odr, tmp);
+        }
+        tmp = spi_read_byte(XL355_FIFO_SAMPLES);
+        if (tmp != fifo_len)
+        {
+            PRINT_WARN("xl355 fifo samples set fail(%x:%x)\r\n", fifo_len, tmp);
+        }
+        tmp = spi_read_byte(XL355_INT_MAP);
+        if (tmp != 0x02)
+        {
+            PRINT_WARN("xl355 int_map set fail(%x:%x)\r\n", 0x02, tmp);
+        }
     }
+}
+
+int adxl355_start_work(void)
+{
+    uint8_t pwrctl = spi_read_byte(XL355_POWER_CTL);
+    pwrctl &= 0xFE;
+
+    spi_write_byte(XL355_POWER_CTL, pwrctl);
+    pwrctl = spi_read_byte(XL355_POWER_CTL);
+    if ((pwrctl & 0x1) != 0)
+    {
+        PRINT_ERROR("xl355 start fail(%x)\r\n", pwrctl);
+        return -1;
+    }
+    return 0;
 }
 
 float adxl355_conversion_acc_data(uint8_t *data)
@@ -1076,13 +1102,135 @@ float adxl355_conversion_temperature(uint8_t *data)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+    
     if(GPIO_Pin == XL355_INT1_Pin)
     {
-        /* Toggle LED1 */
         gpio_int_flag++;
-
+    }
+		else if (GPIO_Pin == GPS_1PPS_Pin)
+    {
+        pps_count++;
     }
 }
+
+/* -------------ublox function ----------------*/
+
+/**
+ * @brief generate ubx protocol msg, which could send to ubx then.
+ * @param msg_class for ubx protocol
+ * @param msg_id    for ubx protocol
+ * @param data       the content of msg
+ * @param data_len
+ * @param buf       the buffer to store the generated msg
+ * @param buf_len
+ *
+ * @return actual length of the msg
+ */
+int ubx_msg_generate(uint8_t msg_class, uint8_t msg_id, const unsigned char *data, uint16_t data_len, uint8_t *buf, uint16_t buf_len)
+{
+    uint8_t CK_A = 0, CK_B = 0;
+    uint16_t count = 0, i = 0;
+
+    if (buf == NULL || buf_len < 6)
+        return -1;
+
+    buf[0] = UBX_SYNC_CHAR1;
+    buf[1] = UBX_SYNC_CHAR2;
+    buf[2] = msg_class;
+    buf[3] = msg_id;
+    buf[4] = data_len & 0xFF;
+    buf[5] = (data_len >> 8) & 0xFF;
+
+    count += 6;
+
+    if (data != NULL && data_len != 0)
+    {
+        memcpy(&buf[count], data, data_len);
+        count += data_len;
+    }
+
+    /* calculate CRC */
+    // for (i = 2; i < count; i++)
+    // {
+    //     CK_A += buf[i];
+    //     CK_B += CK_A;
+    // }
+    for (i = 2; i < 6; i++)
+    {
+        CK_A += buf[i];
+        CK_B += CK_A;
+    }
+    if (data != NULL)
+        for (i = 0; i < data_len; i++)
+        {
+            CK_A += data[i];
+            CK_B += CK_A;
+        }
+
+    buf[count]   = CK_A;
+    buf[count+1] = CK_B;
+    count += 2;
+
+    return count;
+}
+
+int ubx_reset(void)
+{
+    // reset ubox
+    HAL_GPIO_WritePin(GPS_RST_GPIO_Port, GPS_RST_Pin, GPIO_PIN_RESET);
+    HAL_Delay(1000);
+    HAL_GPIO_WritePin(GPS_RST_GPIO_Port, GPS_RST_Pin, GPIO_PIN_SET);
+
+    return 0;
+}
+int ubx_init(void)
+{
+    uint8_t buf[64] = {0};
+    int msg_len = 0;
+    int ret;
+
+    msg_len = ubx_msg_generate(UBX_CFG_CLASS_ID, UBX_CFG_TP5_MSG_ID, UBX_MSG_DATA_SET_TIMEPULSE_0, sizeof(UBX_MSG_DATA_SET_TIMEPULSE_0), buf, sizeof(buf));
+    if (msg_len > 6)
+    {
+        ret = HAL_UART_Transmit(&huart2, buf, msg_len, 1000);
+        if (ret == HAL_OK)
+        {
+            PRINT_DEBUG("send cfg0 message to ubx successfully\r\n");
+        }
+        else
+        {
+            PRINT_WARN("send cfg0 message to ubx fail:%d\r\n", ret);
+            return -1;
+        }
+    }
+    else
+    {
+        PRINT_WARN("generate ubx cfg0 message fail, returrn len:%d\r\n", msg_len);
+        return -1;
+    }
+    
+    msg_len = ubx_msg_generate(UBX_CFG_CLASS_ID, UBX_CFG_TP5_MSG_ID, UBX_MSG_DATA_SET_TIMEPULSE_1, sizeof(UBX_MSG_DATA_SET_TIMEPULSE_1), buf, sizeof(buf));
+    if (msg_len > 6)
+    {
+        ret = HAL_UART_Transmit(&huart2, buf, msg_len, 1000);
+        if (ret == HAL_OK)
+        {
+            PRINT_DEBUG("send cfg1 message to ubx successfully\r\n");
+        }
+        else
+        {
+            PRINT_WARN("send cfg1 message to ubx fail:%d\r\n", ret);
+            return -1;
+        }
+    }
+    else
+    {
+        PRINT_WARN("generate ubx cfg1 message fail, returrn len:%d\r\n", msg_len);
+        return -1;
+    }
+    return 0;
+}
+
 
 /* ------------my log function---------------- */
 #define MAX_ONE_LOG_SIZE   (250)									// length of one log message

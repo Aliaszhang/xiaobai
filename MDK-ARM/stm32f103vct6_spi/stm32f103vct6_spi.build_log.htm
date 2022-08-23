@@ -22,27 +22,29 @@ Dialog DLL:      TCM.DLL V1.56.1.0
  
 <h2>Project:</h2>
 D:\keil_workspace\stm32f103vct6_spi\MDK-ARM\stm32f103vct6_spi.uvprojx
-Project File Date:  08/22/2022
+Project File Date:  08/23/2022
 
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 (build 20)', folder: 'D:\keil_v5\ARM\ARMCC\Bin'
 Build target 'stm32f103vct6_spi'
 compiling main.c...
-../Core/Src/main.c(185): warning:  #188-D: enumerated type mixed with another type
+../Core/Inc/ubx.h(62): warning:  #1-D: last line of file ends without a newline
+  #endif
+../Core/Src/main.c(202): warning:  #188-D: enumerated type mixed with another type
         ret = spi_read_multipe_bytes(
 L355_TEMP2, &spi_read_reg_array[0], 11);
-../Core/Src/main.c(191): warning:  #188-D: enumerated type mixed with another type
+../Core/Src/main.c(208): warning:  #188-D: enumerated type mixed with another type
         ret = spi_read_multipe_bytes(
 L355_FIFO_DATA, &spi_send_array[count], 63);
-../Core/Src/main.c(243): warning:  #128-D: loop is not reachable
+../Core/Src/main.c(260): warning:  #128-D: loop is not reachable
     while (1)
-../Core/Src/main.c(126): warning:  #550-D: variable "ret" was set but never used
+../Core/Src/main.c(132): warning:  #550-D: variable "ret" was set but never used
   	HAL_StatusTypeDef ret;
-../Core/Src/main.c: 4 warnings, 0 errors
+../Core/Src/main.c: 5 warnings, 0 errors
 linking...
-Program Size: Code=25836 RO-data=1060 RW-data=32 ZI-data=22808  
+Program Size: Code=26788 RO-data=1228 RW-data=68 ZI-data=22812  
 FromELF: creating hex file...
-"stm32f103vct6_spi\stm32f103vct6_spi.axf" - 0 Error(s), 4 Warning(s).
+"stm32f103vct6_spi\stm32f103vct6_spi.axf" - 0 Error(s), 5 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -65,7 +67,7 @@ Package Vendor: Keil
 <h2>Collection of Component Files used:</h2>
 
    * Component: ARM::CMSIS:CORE:5.6.0
-Build Time Elapsed:  00:00:02
+Build Time Elapsed:  00:00:03
 </pre>
 </body>
 </html>

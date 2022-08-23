@@ -38,3 +38,4 @@ stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\string.h
 stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\stdarg.h
 stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 stm32f103vct6_spi\main.o: ../Core/Inc/xl355.h
+stm32f103vct6_spi\main.o: ../Core/Inc/ubx.h
