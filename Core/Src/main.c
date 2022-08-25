@@ -41,8 +41,13 @@
 #define PRINT_DEBUG(fmt, args...)  LOG_DEBUG("[MAIN]%s Line %d: "fmt, my_basename(__FILE__), __LINE__, ##args)
 #define PRINT_BIN(fmt, args...)    LOG_BINARY("[MAIN]%s Line %d: "fmt, my_basename(__FILE__), __LINE__, ##args)
 
+// 接收ubx数据的串口buffer
 #define UART_RX_MAX_LEN (3000u)
+// 时区设置为 +0
 #define TIME_ZONE 0
+// 震动数据接收缓存，每个点9byte， 收满500个点发送一次
+// 200是为添加的包头和校验码留的空间
+#define  ARRAYSIZE         (XL355_SAMPLE_COUNT + 200)
 typedef enum {
   LED_ON = 1,
   LED_OFF= 2,
@@ -149,23 +154,28 @@ DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
-#define  ARRAYSIZE         (XL355_SAMPLE_COUNT + 200)
-
 uint32_t int_device_serial[3];
 uint32_t int_device_memery_info;
 
+// 接收震动数据的buffer
 uint8_t spi_send_array[ARRAYSIZE] = {0};
+// 发送震动数据的buffer
 uint8_t spi_send_array_bak[ARRAYSIZE] = {0};
+// 从xl355寄存器读一次温度传感器和 xyz 3轴的震动数据用的buffer
 uint8_t spi_read_reg_array[12] = {0}; 
 
-int gpio_int_flag = 0;
+int xl355_fifo_full_flag = 0;
 
+// 用于暂存打印日志的buffer
 int msg_len = 0;
 uint8_t print_msg[256] = {0};
 
+// 处理ubx的nmea消息的buffer
 uint8_t ubx_buff[UART_RX_MAX_LEN] = {0};
 uart_rx_t ubx_rx_buffer;
+// 运行过程中的参数和标志
 sys_run_mark_t sys_run;
+// 从ubx解析出来的信息，包括经纬度，时间，卫星数
 gnss_info_t gs_gnss_info;
 /* USER CODE END PV */
 
@@ -202,6 +212,7 @@ int led_ctl(led_type_t name, led_ctl_t on_off);
 int ubx_reset(void);
 int ubx_init(void);
 int ubx_msg_generate(uint8_t msg_class, uint8_t msg_id, const unsigned char *data, uint16_t data_len, uint8_t *buf, uint16_t buf_len);
+/*int xl355_resync(void)*/
 int parse_nmea_message(uint8_t *nmea_msg);
 int package_xl355_raw_data(uint8_t *in_buf, uint8_t *out_buff, int data_len);
 uint32_t get_unix_timestamp(void);
@@ -220,7 +231,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   int i;
-  int count = 0;
+  int count = 0; // 接收数据计数，满4500清零（10*50*9）
   int package_len = 0;
 	HAL_StatusTypeDef ret;
   /* USER CODE END 1 */
@@ -271,7 +282,7 @@ int main(void)
 	PRINT_INFO("The Flash size:%uKBytes, SRAM size:%uKBytes\r\n", (int_device_memery_info & 0xFFFF), (int_device_memery_info >> 16 & 0xFFFF));
 
   ubx_reset();
-  HAL_Delay(100);  // wait for UBX start work, then send the message
+  HAL_Delay(100);  // wait for UBX start work
 	ubx_init();
 
   adxl355_init(XL355_RANGE_2G, XL355_ODR_2000HZ, XL355_FIFO_SAMPLE_90, XL355_EXT_SYNC01);
@@ -281,7 +292,7 @@ int main(void)
 
   memset(&sys_run, 0, sizeof(sys_run_mark_t));
   memset(spi_send_array, 0x0, ARRAYSIZE);
-  gpio_int_flag = 0;
+  xl355_fifo_full_flag = 0;
   count = 0;
 
   memset(&ubx_rx_buffer, 0x0, sizeof(uart_rx_t));
@@ -291,7 +302,7 @@ int main(void)
 	
 	while(1)
 	{
-		if (gpio_int_flag > 0)
+		if (xl355_fifo_full_flag > 0)
     {
       // memset(spi_read_reg_array, 0x0, 12);
       // ret = spi_read_multipe_bytes(XL355_TEMP2, &spi_read_reg_array[0], 11);
@@ -311,7 +322,7 @@ int main(void)
       //     }
       // } 
 			
-      // PRINT_DEBUG("gpio_int_flag: %d\tadxl355_%04d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", gpio_int_flag, count, \
+      // PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355_%04d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, count, \
       //             adxl355_conversion_acc_data(&spi_send_array[count]), \
       //             adxl355_conversion_acc_data(&spi_send_array[count+3]), \
       //             adxl355_conversion_acc_data(&spi_send_array[count+6]));
@@ -332,28 +343,34 @@ int main(void)
         sys_run.unix_timestamp_second =  get_unix_timestamp();
         sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
 
-        PRINT_DEBUG("time:%u.%06u send %d bytes to uart\r\n", sys_run.unix_timestamp_second, sys_run.unix_timestamp_micro_second, package_len);
+        // PRINT_DEBUG("time:%u.%06u send %d bytes to uart\r\n", sys_run.unix_timestamp_second, sys_run.unix_timestamp_micro_second, package_len);
+        PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355_%04d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, count, \
+            adxl355_conversion_acc_data(&spi_send_array_bak[15]), \
+            adxl355_conversion_acc_data(&spi_send_array_bak[18]), \
+            adxl355_conversion_acc_data(&spi_send_array_bak[21]));
 			}
-			gpio_int_flag = 0;
+			xl355_fifo_full_flag = 0;
     }
 
+    // 秒脉冲处理
     if (sys_run.pps_flag == true)
     {
       sys_run.pps_flag = false;
-      led_ctl(WORK_LED, LED_TOGGLE);
+      led_ctl(WORK_LED, LED_TOGGLE); // 翻转 LED工作灯
 
       // check if we have done sync
       if (sys_run.xl355_sync_flag == false)
       {
         if (sys_run.pps_count == 4)
         {
-          // todo: update system time by gps
+          // start do sync
           sys_run.start_sync_flag = SYNC_STEP1; // step 1
           sys_run.time_5ms_count = 0;
           PRINT_DEBUG("SYNC_STEP1......\r\n");
         }
         else if (sys_run.pps_count == 5)
         {
+          // syncing
           sys_run.start_sync_flag = SYNC_STEP3; // step 3
           PRINT_DEBUG("SYNC_STEP3......\r\n");
           spi_read_multipe_bytes(XL355_FIFO_DATA, &spi_send_array[0], XL355_FIFO_SAMPLE_90);
@@ -368,20 +385,21 @@ int main(void)
 
     if (sys_run.xl355_sync_flag == false)
     {
-      if ((sys_run.start_sync_flag == SYNC_STEP0 || sys_run.start_sync_flag == SYNC_STEP2) && sys_run.time_5ms_count % 100 == 1)
+      if ((sys_run.start_sync_flag == SYNC_STEP0 || sys_run.start_sync_flag == SYNC_STEP2) \
+            && sys_run.time_5ms_count % 100 == 1)
       {
-        led_ctl(SYNC_LED, LED_TOGGLE);
+        led_ctl(SYNC_LED, LED_TOGGLE); // 翻转 同步LED灯
       }
       else if (sys_run.start_sync_flag == SYNC_STEP1 && sys_run.time_5ms_count > 120) // about 600ms
       {      
-        // start xl355 sync
+        // enable xl355 sync
         HAL_GPIO_WritePin(XL355_SYNC_GPIO_Port, XL355_SYNC_Pin, GPIO_PIN_SET);
         sys_run.start_sync_flag = SYNC_STEP2;     // step 2
         PRINT_DEBUG("SYNC_STEP2......\r\n");
       }
-      else if (sys_run.start_sync_flag == SYNC_STEP3 && sys_run.time_5ms_count > 100) // about 1.5s
+      else if (sys_run.start_sync_flag == SYNC_STEP3 && sys_run.time_5ms_count > 100) // about 500ms
       {
-        // stop xl355 sync
+        // disable xl355 sync
         HAL_GPIO_WritePin(XL355_SYNC_GPIO_Port, XL355_SYNC_Pin, GPIO_PIN_RESET);
         led_ctl(SYNC_LED, LED_ON);
         sys_run.xl355_sync_flag = true;
@@ -1258,12 +1276,13 @@ float adxl355_conversion_temperature(uint8_t *data)
     return temp;
 }
 
+/* -------------gpio interrupt handle -------------------*/
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     
     if(GPIO_Pin == XL355_INT1_Pin)
     {
-        gpio_int_flag++;
+        xl355_fifo_full_flag++;
         sys_run.time_5ms_count++;
     }
 		else if (GPIO_Pin == GPS_1PPS_Pin)
@@ -1279,7 +1298,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
  * @brief generate ubx protocol msg, which could send to ubx then.
  * @param msg_class for ubx protocol
  * @param msg_id    for ubx protocol
- * @param data       the content of msg
+ * @param data      the content of msg
  * @param data_len
  * @param buf       the buffer to store the generated msg
  * @param buf_len
@@ -1315,17 +1334,6 @@ int ubx_msg_generate(uint8_t msg_class, uint8_t msg_id, const unsigned char *dat
         CK_A += buf[i];
         CK_B += CK_A;
     }
-    // for (i = 2; i < 6; i++)
-    // {
-    //     CK_A += buf[i];
-    //     CK_B += CK_A;
-    // }
-    // if (data != NULL)
-    //     for (i = 0; i < data_len; i++)
-    //     {
-    //         CK_A += data[i];
-    //         CK_B += CK_A;
-    //     }
 
     buf[count]   = CK_A;
     buf[count+1] = CK_B;
@@ -1399,7 +1407,6 @@ void ubx_uart_recv_data_callback(UART_HandleTypeDef *huart)
     {
         __HAL_UART_CLEAR_IDLEFLAG(huart);
         HAL_UART_DMAStop(huart);
-        // SCB_InvalidateDCache_by_Addr(&ubx_rx_buffer, (uint32_t)sizeof(uart_rx_t));
         temp = __HAL_DMA_GET_COUNTER(huart->hdmarx);
         ubx_rx_buffer.buffer_len =  UART_RX_MAX_LEN - 1 - temp;
         if (ubx_rx_buffer.buffer_len > 0)
@@ -1421,6 +1428,13 @@ void ubx_uart_recv_data_callback(UART_HandleTypeDef *huart)
         HAL_UART_Receive_DMA(huart, ubx_rx_buffer.buffer, UART_RX_MAX_LEN - 1);
     }
 }
+
+/*int xl355_resync(void)
+{
+  sys_run.xl355_sync_flag = false;
+  sys_run.start_sync_flag = SYNC_STEP0;
+  return 0;
+}*/
 
 /* ----------------parse nmea ----------------------*/
 static int string_to_double(char *str, double *param)
@@ -1811,11 +1825,6 @@ static int parse_one_nmea_message(char *msg)
 
 int parse_nmea_message(uint8_t *nmea_msg)
 {
-    // char *ptmp = NULL;
-
-		// ptmp = (char *)malloc(strlen((char *)nmea_msg));
-		// memcpy(ptmp, (char *)nmea_msg, strlen((char *)nmea_msg));
-	  //ptmp = strdup((const char *)nmea_msg);        // must be free !!!
     if (nmea_msg == NULL)
     {
         PRINT_ERROR("strdup fail\n");
@@ -1833,7 +1842,6 @@ int parse_nmea_message(uint8_t *nmea_msg)
         msg_ptr = strtok_r(NULL, "$", &save_ptr);
     }
 
-    // free (ptmp);
     return 0;
 }
 
@@ -2043,17 +2051,17 @@ int led_ctl(led_type_t name, led_ctl_t on_off)
 
   if (name == SYNC_LED)
   {
-      GPIOx = LED_SYNC_GPIO_Port;
-      pin = LED_SYNC_Pin;
+    GPIOx = LED_SYNC_GPIO_Port;
+    pin = LED_SYNC_Pin;
   }
   else if (name == WORK_LED)
   {
-      GPIOx = LED_RUN_GPIO_Port;
-      pin = LED_RUN_Pin;
+    GPIOx = LED_RUN_GPIO_Port;
+    pin = LED_RUN_Pin;
   }
   else
   {
-      return -1;
+    return -1;
   }
 
   if (on_off == LED_ON)
