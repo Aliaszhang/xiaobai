@@ -42,6 +42,7 @@
 #define PRINT_BIN(fmt, args...)    LOG_BINARY("[MAIN]%s Line %d: "fmt, my_basename(__FILE__), __LINE__, ##args)
 
 #define UART_RX_MAX_LEN (3000u)
+#define TIME_ZONE 0
 typedef enum {
   LED_ON = 1,
   LED_OFF= 2,
@@ -1716,7 +1717,7 @@ static int parse_zda(uint8_t *data)
     string_to_uint8(msg_ptr, &(gs_gnss_info.utc_time.utc_YY));
 
     // set rtc date and time
-    utc_to_timezone_time(&(gs_gnss_info.utc_time), 8);
+    utc_to_timezone_time(&(gs_gnss_info.utc_time), TIME_ZONE);
     rtc_date.Year    = gs_gnss_info.utc_time.utc_YY;
     rtc_date.Month   = gs_gnss_info.utc_time.utc_MM;
     rtc_date.Date    = gs_gnss_info.utc_time.utc_DD;
