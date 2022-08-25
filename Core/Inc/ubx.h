@@ -52,7 +52,7 @@ unsigned char UBX_MSG_DATA_SET_TIMEPULSE_1[] = {
     0x00, 0x00,             // Antenna cable delay
     0x00, 0x00,             // RF group delay
     0x00, 0xA0, 0x0F, 0x00, // Frequency or period time, depending on setting of bit ’isFreq’
-    0x00, 0xD0, 0x07, 0x00, // 512kHz=0x0007D000 Frequency or period time when locked to GPS time, only used if ’lockedOtherSet’ is set
+    0x00, 0xA0, 0x0F, 0x00, // 512kHz=0x0007D000 Frequency or period time when locked to GPS time, only used if ’lockedOtherSet’ is set
     0x00, 0x00, 0x00, 0x80, // Pulse length or duty cycle, depending on ’isLength’
     0x00, 0x00, 0X00, 0X80, // Pulse length or duty cycle when locked to GPS time, only used if ’lockedOtherSet’ is set
     0x00, 0x00, 0x00, 0x00, // User configurable timepulse delay

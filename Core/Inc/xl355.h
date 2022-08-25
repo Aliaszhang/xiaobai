@@ -55,6 +55,14 @@
 #define XL355_ODR_500HZ         0x03
 #define XL355_ODR_250HZ         0x04
 #define XL355_FIFO_SAMPLE_63    0x3F
+#define XL355_FIFO_SAMPLE_90    0x5A
+
+// FIFO_FULL interrupt 50 times 
+#define XL355_SAMPLE_COUNT      (XL355_FIFO_SAMPLE_90 * 50)
+
+#define XL355_INNER_SYNC        0x00
+#define XL355_EXT_SYNC01        0x05
+#define XL355_EXT_SYNC10        0x06
 
 
 #endif /* SRC_XL355_H_ */

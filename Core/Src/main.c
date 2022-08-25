@@ -41,6 +41,90 @@
 #define PRINT_DEBUG(fmt, args...)  LOG_DEBUG("[MAIN]%s Line %d: "fmt, my_basename(__FILE__), __LINE__, ##args)
 #define PRINT_BIN(fmt, args...)    LOG_BINARY("[MAIN]%s Line %d: "fmt, my_basename(__FILE__), __LINE__, ##args)
 
+#define UART_RX_MAX_LEN (3000u)
+typedef enum {
+  LED_ON = 1,
+  LED_OFF= 2,
+  LED_TOGGLE = 3
+} led_ctl_t;
+
+typedef enum {
+  SYNC_LED = 1,
+  WORK_LED = 2
+} led_type_t;
+
+typedef enum {
+  SYNC_STEP0 = 0,
+  SYNC_STEP1 = 1,
+  SYNC_STEP2 = 2,
+  SYNC_STEP3 = 3,
+  SYNC_STEP4 = 4
+} sync_step_t;
+
+typedef enum
+{
+    NMEA_UNKNOWN = -1,
+    NMEA_GGA = 0,
+    NMEA_GSV,
+    NMEA_RMC,
+    NMEA_ZDA
+}nmea_msg_type_t;
+
+typedef struct {
+  uint16_t time_5ms_count;
+  uint16_t time_1_sec_count;
+  uint16_t pps_count;
+  bool pps_flag;
+  bool xl355_sync_flag;
+  uint8_t start_sync_flag;
+  bool nmea_flag;
+  uint32_t unix_timestamp_second;
+  uint32_t unix_timestamp_micro_second;
+} sys_run_mark_t;
+
+typedef struct
+{
+    uint32_t buffer_len;
+    uint8_t  buffer[UART_RX_MAX_LEN];
+} uart_rx_t;
+
+typedef struct
+{
+    uint8_t utc_hh;
+    uint8_t utc_mm;
+    uint8_t utc_ss;
+    uint8_t utc_DD;
+    uint8_t utc_MM;
+    uint8_t utc_YY;
+}gps_time_t;
+
+typedef struct
+{
+    char    lat_dir;         // 纬度方向(N:北纬,S:南纬)
+    char    lon_dir;         // 经度方向(E:东经,W:西经)
+    char    var_dir;          // 磁偏角方向,E/W
+    char    pos_status;      // 定位状态:A=有效定位, V=无效定位
+    char    mode_ind;        // 定位模式指示
+    char    a_units;         // 天线高单位,m
+    uint8_t gps_qual;        // 解状态, 1:GPS 定位; 4:RTK 固定解; 5:RTK 浮点解
+    uint8_t compute_sats;    // 参与计算的卫星数
+    uint8_t gp_obs_sats;     // gps 卫星数
+    uint8_t bd_obs_sats;     // bd  卫星数
+    uint8_t gl_obs_sats;     // glo 卫星数
+    uint8_t ga_obs_sats;     // gal 卫星书
+    float   alt;             // 天线高度(海平面以上或以下)
+    float   speed;           // 地面速率
+    float   track_true;      // 地面航向,以真北方向为基准
+    float   mag_var;         // 磁偏角(000-180.0°)
+    double  lat;             // 纬度
+    double  lon;             // 经度
+}position_info_t;
+
+typedef struct
+{
+    gps_time_t utc_time;
+    position_info_t pos;
+}gnss_info_t;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -64,21 +148,24 @@ DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
-#define  ARRAYSIZE         5000
+#define  ARRAYSIZE         (XL355_SAMPLE_COUNT + 200)
 
 uint32_t int_device_serial[3];
 uint32_t int_device_memery_info;
 
 uint8_t spi_send_array[ARRAYSIZE] = {0};
-uint8_t spi_send_array_bak[ARRAYSIZE+20] = {0};
+uint8_t spi_send_array_bak[ARRAYSIZE] = {0};
 uint8_t spi_read_reg_array[12] = {0}; 
 
 int gpio_int_flag = 0;
-int pps_count = 0;
 
 int msg_len = 0;
 uint8_t print_msg[256] = {0};
 
+uint8_t ubx_buff[UART_RX_MAX_LEN] = {0};
+uart_rx_t ubx_rx_buffer;
+sys_run_mark_t sys_run;
+gnss_info_t gs_gnss_info;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,7 +184,7 @@ static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void get_chip_serial_num(void);
 void get_chip_memery_info(void);
-void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len);
+void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len, uint8_t sync_set);
 int adxl355_start_work(void);
 float adxl355_conversion_acc_data(uint8_t *data);
 float adxl355_conversion_temperature(uint8_t *data);
@@ -110,10 +197,13 @@ char *my_basename(char *s);
 int log_print(void);
 void HAL_RTC_GetTime_and_Date(RTC_DateTypeDef *s_date, RTC_TimeTypeDef *s_time);
 void HAL_RTC_SetTime_and_Date(RTC_DateTypeDef *s_data, RTC_TimeTypeDef *s_time);
-
+int led_ctl(led_type_t name, led_ctl_t on_off);
 int ubx_reset(void);
 int ubx_init(void);
 int ubx_msg_generate(uint8_t msg_class, uint8_t msg_id, const unsigned char *data, uint16_t data_len, uint8_t *buf, uint16_t buf_len);
+int parse_nmea_message(uint8_t *nmea_msg);
+int package_xl355_raw_data(uint8_t *in_buf, uint8_t *out_buff, int data_len);
+uint32_t get_unix_timestamp(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -129,6 +219,8 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   int i;
+  int count = 0;
+  int package_len = 0;
 	HAL_StatusTypeDef ret;
   /* USER CODE END 1 */
 
@@ -161,6 +253,8 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  led_ctl(WORK_LED, LED_ON);
+  led_ctl(SYNC_LED, LED_ON);
   PRINT_INFO("start stm32f103vct6\r\n");
 	
 	/* get chip serial number */
@@ -178,79 +272,134 @@ int main(void)
   ubx_reset();
   HAL_Delay(100);  // wait for UBX start work, then send the message
 	ubx_init();
-	log_print();
-  adxl355_init(XL355_RANGE_2G, XL355_ODR_500HZ, XL355_FIFO_SAMPLE_63);
-  while(pps_count < 10)
-	{
-		HAL_Delay(500);
-	}
-  PRINT_INFO("ubx finish pps sync\r\n");
-  //HAL_GPIO_DeInit(GPS_1PPS_GPIO_Port, GPS_1PPS_Pin);
-  adxl355_start_work();
-  HAL_GPIO_WritePin(GPS_EN_GPIO_Port, GPS_EN_Pin, GPIO_PIN_RESET);
-	log_print();
 
-	int count = 0;
-	int pack_count = 0;
-	uint32_t adler32_check_sum = 0;
-		
+  adxl355_init(XL355_RANGE_2G, XL355_ODR_2000HZ, XL355_FIFO_SAMPLE_90, XL355_EXT_SYNC01);
+  adxl355_start_work();
+
+  log_print();
+
+  memset(&sys_run, 0, sizeof(sys_run_mark_t));
+  memset(spi_send_array, 0x0, ARRAYSIZE);
+  gpio_int_flag = 0;
+  count = 0;
+
+  memset(&ubx_rx_buffer, 0x0, sizeof(uart_rx_t));
+  memset(&gs_gnss_info, 0x0, sizeof(gnss_info_t));
+  HAL_UART_Receive_DMA(&huart2, ubx_rx_buffer.buffer, UART_RX_MAX_LEN - 1);
+  __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
+	
 	while(1)
 	{
 		if (gpio_int_flag > 0)
     {
-      memset(spi_read_reg_array, 0x0, 12);
-      ret = spi_read_multipe_bytes(XL355_TEMP2, &spi_read_reg_array[0], 11);
+      // memset(spi_read_reg_array, 0x0, 12);
+      // ret = spi_read_multipe_bytes(XL355_TEMP2, &spi_read_reg_array[0], 11);
 
-      PRINT_DEBUG("adxl355: temp:%0.2f\t\taccx:%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", \
-								adxl355_conversion_temperature(&spi_read_reg_array[0]), adxl355_conversion_acc_data(&spi_read_reg_array[2]), \
-								adxl355_conversion_acc_data(&spi_read_reg_array[5]), adxl355_conversion_acc_data(&spi_read_reg_array[8]));
+      // PRINT_DEBUG("adxl355: temp:%0.2f\t\taccx:%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", \
+			// 					adxl355_conversion_temperature(&spi_read_reg_array[0]), adxl355_conversion_acc_data(&spi_read_reg_array[2]), \
+			// 					adxl355_conversion_acc_data(&spi_read_reg_array[5]), adxl355_conversion_acc_data(&spi_read_reg_array[8]));
      
-      ret = spi_read_multipe_bytes(XL355_FIFO_DATA, &spi_send_array[count], 63);
+      ret = spi_read_multipe_bytes(XL355_FIFO_DATA, &spi_send_array[count], XL355_FIFO_SAMPLE_90);
 
-      PRINT_DEBUG("count:%04d, gpio_int_flag: %d\r\n", count, gpio_int_flag);		
-
-      for (i = (count+2); i < (count+63); i+=9)
-      {
-          if ((spi_send_array[i] & 0x01) == 0x01)
-          {
-              PRINT_DEBUG("adxl355: %d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", i, \
-							    adxl355_conversion_acc_data(&spi_send_array[i-2]), adxl355_conversion_acc_data(&spi_send_array[i+1]), adxl355_conversion_acc_data(&spi_send_array[i+4]));
-          }
-      } 
-
-      log_print();
+      // for (i = (count+2); i < (count + XL355_FIFO_SAMPLE_90); i+=9)
+      // {
+      //     if ((spi_send_array[i] & 0x01) == 0x01)
+      //     {
+      //         PRINT_DEBUG("adxl355: %d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", i, \
+			// 				    adxl355_conversion_acc_data(&spi_send_array[i-2]), adxl355_conversion_acc_data(&spi_send_array[i+1]), adxl355_conversion_acc_data(&spi_send_array[i+4]));
+      //     }
+      // } 
 			
-			count += 63;
-			if (count >= 4977)
+      // PRINT_DEBUG("gpio_int_flag: %d\tadxl355_%04d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", gpio_int_flag, count, \
+      //             adxl355_conversion_acc_data(&spi_send_array[count]), \
+      //             adxl355_conversion_acc_data(&spi_send_array[count+3]), \
+      //             adxl355_conversion_acc_data(&spi_send_array[count+6]));
+
+			count += XL355_FIFO_SAMPLE_90;
+			if (count >= XL355_SAMPLE_COUNT)
 			{
-				count = 0 ;
-				pack_count = 0;
-				memset(spi_send_array_bak, 0x0, ARRAYSIZE+20);
-				spi_send_array_bak[0] = 0xEF;
-				spi_send_array_bak[1] = 0xEF;
-				spi_send_array_bak[2] = ((4977 & 0xFF000000) >> 24);
-				spi_send_array_bak[3] = ((4977 & 0x00FF0000) >> 16);
-				spi_send_array_bak[4] = ((4977 & 0x0000FF00) >> 8);
-				spi_send_array_bak[5] = ((4977 & 0x000000FF) >> 0);
-				
-				pack_count += 6;
-				
-				memcpy(&spi_send_array_bak[6], spi_send_array, 4977);
-				pack_count += 4977;
-				
-				adler32_check_sum = adler32(spi_send_array_bak, pack_count);
-				spi_send_array_bak[pack_count+0] = ((adler32_check_sum & 0xFF000000) >> 24);
-				spi_send_array_bak[pack_count+1] = ((adler32_check_sum & 0x00FF0000) >> 16);
-				spi_send_array_bak[pack_count+2] = ((adler32_check_sum & 0x0000FF00) >> 8);
-				spi_send_array_bak[pack_count+3] = ((adler32_check_sum & 0x000000FF) >> 0);
-				pack_count += 4;
-				
-				HAL_UART_Transmit_DMA(&huart3, spi_send_array_bak, pack_count);
+        // send data
+				memset(spi_send_array_bak, 0x0, ARRAYSIZE);
+        package_len = package_xl355_raw_data(spi_send_array, spi_send_array_bak, count);
+
+        if (package_len > 0)
+					HAL_UART_Transmit_DMA(&huart3, spi_send_array_bak, package_len);
+        
 				memset(spi_send_array, 0x0, ARRAYSIZE);
+        count = 0 ;
+
+        sys_run.unix_timestamp_second =  get_unix_timestamp();
+        sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
+
+        PRINT_DEBUG("time:%u.%06u send %d bytes to uart\r\n", sys_run.unix_timestamp_second, sys_run.unix_timestamp_micro_second, package_len);
 			}
 			gpio_int_flag = 0;
     }
 
+    if (sys_run.pps_flag == true)
+    {
+      sys_run.pps_flag = false;
+      led_ctl(WORK_LED, LED_TOGGLE);
+
+      // check if we have done sync
+      if (sys_run.xl355_sync_flag == false)
+      {
+        if (sys_run.pps_count == 4)
+        {
+          // todo: update system time by gps
+          sys_run.start_sync_flag = SYNC_STEP1; // step 1
+          sys_run.time_5ms_count = 0;
+          PRINT_DEBUG("SYNC_STEP1......\r\n");
+        }
+        else if (sys_run.pps_count == 5)
+        {
+          sys_run.start_sync_flag = SYNC_STEP3; // step 3
+          PRINT_DEBUG("SYNC_STEP3......\r\n");
+          spi_read_multipe_bytes(XL355_FIFO_DATA, &spi_send_array[0], XL355_FIFO_SAMPLE_90);
+          memset(spi_send_array, 0x0, ARRAYSIZE); // data is synced after pps count == 5
+          sys_run.time_5ms_count = 0; // time_5ms_count must be 0 after sync
+          sys_run.unix_timestamp_second =  get_unix_timestamp();
+          sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
+          count = 0;
+        }
+      }
+    }
+
+    if (sys_run.xl355_sync_flag == false)
+    {
+      if ((sys_run.start_sync_flag == SYNC_STEP0 || sys_run.start_sync_flag == SYNC_STEP2) && sys_run.time_5ms_count % 100 == 1)
+      {
+        led_ctl(SYNC_LED, LED_TOGGLE);
+      }
+      else if (sys_run.start_sync_flag == SYNC_STEP1 && sys_run.time_5ms_count > 120) // about 600ms
+      {      
+        // start xl355 sync
+        HAL_GPIO_WritePin(XL355_SYNC_GPIO_Port, XL355_SYNC_Pin, GPIO_PIN_SET);
+        sys_run.start_sync_flag = SYNC_STEP2;     // step 2
+        PRINT_DEBUG("SYNC_STEP2......\r\n");
+      }
+      else if (sys_run.start_sync_flag == SYNC_STEP3 && sys_run.time_5ms_count > 100) // about 1.5s
+      {
+        // stop xl355 sync
+        HAL_GPIO_WritePin(XL355_SYNC_GPIO_Port, XL355_SYNC_Pin, GPIO_PIN_RESET);
+        led_ctl(SYNC_LED, LED_ON);
+        sys_run.xl355_sync_flag = true;
+        sys_run.start_sync_flag = SYNC_STEP4;
+
+        PRINT_DEBUG("SYNC_STEP4...... finish sync\r\n");
+      }
+    }
+
+    if (sys_run.nmea_flag == true)
+    {
+      sys_run.nmea_flag = false;
+      parse_nmea_message(ubx_buff);
+    }
+    if (sys_run.time_5ms_count >= 60000) // 5 minutes
+    {
+      sys_run.time_5ms_count = 0;
+    }
+    log_print();
 	}
 
   /* USER CODE END 2 */
@@ -430,7 +579,10 @@ static void MX_RTC_Init(void)
   }
 
   /* USER CODE BEGIN Check_RTC_BKUP */
-
+  if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == 0x5A5A)
+  {
+     return;
+  }
   /* USER CODE END Check_RTC_BKUP */
 
   /** Initialize RTC and set the Time and Date
@@ -453,7 +605,7 @@ static void MX_RTC_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 2 */
-
+  HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x5A5A);
   /* USER CODE END RTC_Init 2 */
 
 }
@@ -844,7 +996,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : GPS_1PPS_Pin */
   GPIO_InitStruct.Pin = GPS_1PPS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPS_1PPS_GPIO_Port, &GPIO_InitStruct);
 
@@ -962,7 +1114,7 @@ int spi_read_multipe_bytes(uint8_t start_addr, uint8_t *rxdata, uint8_t len)
         HAL_GPIO_WritePin(XL355_SPI_CS_GPIO_Port, XL355_SPI_CS_Pin, GPIO_PIN_SET);
         return -1;
     }
-    if (HAL_SPI_Receive(&hspi1, rxdata, len, 0xFFF) != HAL_OK)
+    if (HAL_SPI_Receive(&hspi1, rxdata, len, 1000) != HAL_OK)
     {
         memset(print_msg, 0x0, 256);
         msg_len = snprintf((char *)print_msg, 256, "\r\nadxl355 read %u bytes from register %u failed\r\n", len, start_addr);
@@ -999,7 +1151,7 @@ int spi_write_multipe_bytes(uint8_t start_addr, uint8_t *txdata, uint8_t len)
     return 0;
 }
 
-void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len)
+void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len, uint8_t sync_set)
 {    
     if (spi_read_byte(XL355_PARTID) != 0xED)
     {
@@ -1015,10 +1167,10 @@ void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len)
 
         spi_write_byte(XL355_RESET, 0x52);
         spi_write_byte(XL355_RANGE, range); // 0xC1
-        spi_write_byte(XL355_FIFO_SAMPLES, fifo_len); // 0x3F: 63: 7x9
+        spi_write_byte(XL355_FIFO_SAMPLES, fifo_len); //
         spi_write_byte(XL355_INT_MAP, 0x02); // FULL_EN1
         spi_write_byte(XL355_FILTER, odr); // 2000hz
-        spi_write_byte(XL355_SYNC, 0x01);
+        spi_write_byte(XL355_SYNC, sync_set);
     //    spi_write_byte(XL355_SELF_TEST, 0x03);
 
         uint8_t tmp;
@@ -1027,26 +1179,31 @@ void adxl355_init(uint8_t range, uint8_t odr, uint8_t fifo_len)
         {
             PRINT_WARN("xl355 range set fail(%x:%x)\r\n", range, tmp);
         }
+        PRINT_WARN("xl355 range set (%x:%x)\r\n", range, tmp);
         tmp = spi_read_byte(XL355_SYNC);
-        if (tmp != 0x01)
+        if (tmp != sync_set)
         {
-            PRINT_WARN("xl355 sync set fail(%x:%x)\r\n", 0x01, tmp);
+            PRINT_WARN("xl355 sync set fail(%x:%x)\r\n", sync_set, tmp);
         }
+        PRINT_WARN("xl355 sync set (%x:%x)\r\n", sync_set, tmp);
         tmp = spi_read_byte(XL355_FILTER);
         if (tmp != odr)
         {
             PRINT_WARN("xl355 odr set fail(%x:%x)\r\n", odr, tmp);
         }
+        PRINT_WARN("xl355 odr set (%x:%x)\r\n", odr, tmp);
         tmp = spi_read_byte(XL355_FIFO_SAMPLES);
         if (tmp != fifo_len)
         {
             PRINT_WARN("xl355 fifo samples set fail(%x:%x)\r\n", fifo_len, tmp);
         }
+        PRINT_WARN("xl355 fifo samples set (%x:%x)\r\n", fifo_len, tmp);
         tmp = spi_read_byte(XL355_INT_MAP);
         if (tmp != 0x02)
         {
             PRINT_WARN("xl355 int_map set fail(%x:%x)\r\n", 0x02, tmp);
         }
+        PRINT_WARN("xl355 int_map set (%x:%x)\r\n", 0x02, tmp);
     }
 }
 
@@ -1106,10 +1263,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     if(GPIO_Pin == XL355_INT1_Pin)
     {
         gpio_int_flag++;
+        sys_run.time_5ms_count++;
     }
 		else if (GPIO_Pin == GPS_1PPS_Pin)
     {
-        pps_count++;
+        sys_run.pps_count++;
+        sys_run.pps_flag = true;
     }
 }
 
@@ -1150,22 +1309,22 @@ int ubx_msg_generate(uint8_t msg_class, uint8_t msg_id, const unsigned char *dat
     }
 
     /* calculate CRC */
-    // for (i = 2; i < count; i++)
-    // {
-    //     CK_A += buf[i];
-    //     CK_B += CK_A;
-    // }
-    for (i = 2; i < 6; i++)
+    for (i = 2; i < count; i++)
     {
         CK_A += buf[i];
         CK_B += CK_A;
     }
-    if (data != NULL)
-        for (i = 0; i < data_len; i++)
-        {
-            CK_A += data[i];
-            CK_B += CK_A;
-        }
+    // for (i = 2; i < 6; i++)
+    // {
+    //     CK_A += buf[i];
+    //     CK_B += CK_A;
+    // }
+    // if (data != NULL)
+    //     for (i = 0; i < data_len; i++)
+    //     {
+    //         CK_A += data[i];
+    //         CK_B += CK_A;
+    //     }
 
     buf[count]   = CK_A;
     buf[count+1] = CK_B;
@@ -1231,10 +1390,519 @@ int ubx_init(void)
     return 0;
 }
 
+void ubx_uart_recv_data_callback(UART_HandleTypeDef *huart)
+{
+    uint32_t temp;
 
+    if((__HAL_UART_GET_FLAG(huart, UART_FLAG_IDLE) != RESET))
+    {
+        __HAL_UART_CLEAR_IDLEFLAG(huart);
+        HAL_UART_DMAStop(huart);
+        // SCB_InvalidateDCache_by_Addr(&ubx_rx_buffer, (uint32_t)sizeof(uart_rx_t));
+        temp = __HAL_DMA_GET_COUNTER(huart->hdmarx);
+        ubx_rx_buffer.buffer_len =  UART_RX_MAX_LEN - 1 - temp;
+        if (ubx_rx_buffer.buffer_len > 0)
+        {
+            if (ubx_rx_buffer.buffer[0] == '$')
+            {
+                // nmea data
+                sys_run.nmea_flag = true;
+                memset(ubx_buff, 0x0, ubx_rx_buffer.buffer_len);
+                memcpy(ubx_buff, ubx_rx_buffer.buffer, ubx_rx_buffer.buffer_len);
+            }
+            // else
+            // {
+            //     // ubx data
+                
+            // }
+        }
+        memset(&ubx_rx_buffer, 0x0, sizeof(uart_rx_t));
+        HAL_UART_Receive_DMA(huart, ubx_rx_buffer.buffer, UART_RX_MAX_LEN - 1);
+    }
+}
+
+/* ----------------parse nmea ----------------------*/
+static int string_to_double(char *str, double *param)
+{
+    if (str == NULL)
+    {
+        return -1;
+    }
+    char *endptr = NULL;
+    *param = strtod(str, &endptr);
+    return 0;
+}
+static int string_to_float(char *str, float *param)
+{
+    if (str == NULL)
+    {
+        return -1;
+    }
+    char *endptr = NULL;
+    *param = strtof(str, &endptr);
+    return 0;
+}
+static int string_to_uint8(char *str, uint8_t *param)
+{
+    if (str == NULL)
+    {
+        return -1;
+    }
+
+    while (str != NULL && *str == '0')
+    {
+        str++;
+    }
+    char *endptr = NULL;
+    *param = (uint8_t)strtoul(str, &endptr, 0);
+    return 0;
+}
+
+void utc_to_timezone_time(gps_time_t *utc_time, int8_t timezone)
+{
+    int year, month, day, hour;
+    int lastday_of_thismonth = 0;        //last day of this month
+    int lastday_of_lastmonth = 0;        //last day of last month
+
+    year  = utc_time->utc_YY; //utc time
+    month = utc_time->utc_MM;
+    day   = utc_time->utc_DD;
+    hour  = utc_time->utc_hh + timezone;
+
+    if (month == 1 || month == 3 || month == 5 || month == 7 || \
+        month == 8 || month == 10 || month == 12)
+    {
+        lastday_of_thismonth = 31;
+
+        if (month == 3)
+        {
+            if ((year % 400 == 0) || ( year % 4 == 0 && year % 100 != 0)) //if this is lunar year
+            {
+                lastday_of_lastmonth = 29;
+            }
+            else
+            {
+                lastday_of_lastmonth = 28;
+            }
+        }
+
+        if (month == 8)
+        {
+            lastday_of_lastmonth = 31;
+        }
+    }
+    else if (month == 4 || month == 6 || month == 9 || month == 11)
+    {
+        lastday_of_thismonth = 30;
+        lastday_of_lastmonth = 31;
+    }
+    else
+    {
+        lastday_of_lastmonth = 31;
+        if ((year % 400 == 0) || ( year % 4 == 0 && year % 100 != 0))
+        {
+            lastday_of_thismonth = 29;
+        }
+        else
+        {
+            lastday_of_thismonth = 28;
+        }
+    }
+
+    if (hour >= 24)
+    {
+        // if >24, day+1
+        hour -= 24;
+        day += 1;
+
+
+        if (day > lastday_of_thismonth)
+        {
+            // next month,  day-lastday of this month
+            day -= lastday_of_thismonth;
+            month += 1;
+            if(month > 12)
+            {
+                // next year , month-12
+                month -= 12;
+                year += 1;
+            }
+        }
+    }
+
+    if(hour < 0)
+    {
+        // if <0, day-1
+        hour += 24;
+        day -= 1;
+        if(day < 1)
+        {
+            // month-1, day=last day of last month
+            day = lastday_of_lastmonth;
+            month -= 1;
+            if (month < 1)
+            {
+                // last year , month=12
+                month = 12;
+                year -= 1;
+            }
+        }
+    }
+
+    utc_time->utc_YY = year;
+    utc_time->utc_MM = month;
+    utc_time->utc_DD = day;
+    utc_time->utc_hh = hour;
+
+    return ;
+}
+
+static int parse_gga(uint8_t *data)
+{
+    // $GPGGA,104227.00,3032.5399904,N,10404.3717714,E,7,21,1.1,546.0337,M,-42.034,M,,*7F
+
+    char *msg_ptr = NULL;
+    char *save_ptr = NULL;
+
+    // PRINT_DEBUG("%s", data);
+    msg_ptr = strtok_r((char *)data, ",", &save_ptr);   // msg_ptr-> $GPGGA
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 104227.00
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 3032.5399904
+    string_to_double(msg_ptr, &(gs_gnss_info.pos.lat));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> N
+    // string_to_uint8(msg_ptr, &(gs_gnss_info.pos.lat_dir));
+    gs_gnss_info.pos.lat_dir = *msg_ptr;
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 10404.3717714
+    string_to_double(msg_ptr, &(gs_gnss_info.pos.lon));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> E
+    // string_to_uint8(msg_ptr, &(gs_gnss_info.pos.lon_dir));
+    gs_gnss_info.pos.lon_dir = *msg_ptr;
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 7
+    string_to_uint8(msg_ptr, &(gs_gnss_info.pos.gps_qual));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 21
+    string_to_uint8(msg_ptr, &(gs_gnss_info.pos.compute_sats));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 1.1
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 546.0337
+    string_to_float(msg_ptr, &(gs_gnss_info.pos.alt));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> M
+    // string_to_uint8(msg_ptr, &(gs_gnss_info.pos.a_units));
+    gs_gnss_info.pos.a_units = *msg_ptr;
+    return 0;
+}
+
+static int parse_gsv(uint8_t *data)
+{
+    /*
+    $GPGSV,2,1,08,23,64,098,,10,68,349,45,24,30,044,,18,26,181,*70
+    $GPGSV,2,2,08,32,46,298,45,12,23,101,29,25,24,136,,31,15,215,*7C
+    $BDGSV,3,1,11,146,70,329,40,156,69,341,41,179,64,006,43,149,63,285,39*6C
+    $BDGSV,3,2,11,182,64,022,42,154,53,334,47,145,31,245,35,183,16,241,39*60
+    $BDGSV,3,3,11,173,30,311,48,168,12,2947,161,30,092,33,,,,*69
+    $GLGSV,1,1,04,42,46,031,43,58,25,294,46,43,25,316,36,51,15,031,45*65
+    $GAGSV,1,1,04,89,59,355,40,81,16,315,43,82,43,261,36,74,24,286,41*69
+     */
+    int flag = 0;
+    uint8_t *tmp = NULL;
+    char *msg_ptr = NULL;
+    char *save_ptr = NULL;
+
+    msg_ptr = strtok_r((char *)data, ",", &save_ptr);   // msg_ptr-> $GPGSV
+    if (strcmp(msg_ptr, "GPGSV") == 0)
+    {
+        flag = 1;
+    }
+    else if (strcmp(msg_ptr, "BDGSV") == 0)
+    {
+        flag = 2;
+    }
+    else if (strcmp(msg_ptr, "GLGSV") == 0)
+    {
+        flag = 3;
+    }
+    else if (strcmp(msg_ptr, "GAGSV") == 0)
+    {
+        flag = 4;
+    }
+    else
+    {
+        PRINT_WARN("unkown gsv %s\n", msg_ptr);
+        return -1;
+    }
+
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 2
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 1
+    if (*msg_ptr == '1')
+    {
+        msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 08
+        switch (flag)
+        {
+        case 1:
+            tmp = &(gs_gnss_info.pos.gp_obs_sats);
+            break;
+        case 2:
+            tmp = &(gs_gnss_info.pos.bd_obs_sats);
+            break;
+        case 3:
+            tmp = &(gs_gnss_info.pos.gl_obs_sats);
+            break;
+        case 4:
+            tmp = &(gs_gnss_info.pos.ga_obs_sats);
+            break;
+        default:
+            break;
+        }
+        string_to_uint8(msg_ptr, tmp);
+    }
+    return 0;
+}
+/*
+static int parse_rmc(uint8_t *data)
+{
+    // $GPRMC,104307.00,A,3032.5399904,N,10404.3717714,E,000.083,308.4,230821,0.0,W,A*20
+    char *msg_ptr = NULL;
+    char *save_ptr = NULL;
+
+    msg_ptr = strtok_r((char *)data, ",", &save_ptr);   // msg_ptr-> $GPRMC
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 104307.00
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> A
+    // string_to_uint8(msg_ptr, &(gs_gnss_info.pos.pos_status));
+    gs_gnss_info.pos.pos_status = *msg_ptr;
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 3032.5399904
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> N
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 10404.3717714
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> E
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 000.083
+    string_to_float(msg_ptr, &(gs_gnss_info.pos.speed));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 308.4
+    string_to_float(msg_ptr, &(gs_gnss_info.pos.track_true));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 230821
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 0
+    string_to_float(msg_ptr, &(gs_gnss_info.pos.mag_var));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> W
+    // string_to_uint8(msg_ptr, &(gs_gnss_info.pos.var_dir));
+    gs_gnss_info.pos.var_dir = *msg_ptr;
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> A
+    // string_to_uint8(msg_ptr, &(gs_gnss_info.pos.mode_ind));
+    gs_gnss_info.pos.mode_ind = *msg_ptr;
+    return 0;
+}*/
+
+static int parse_zda(uint8_t *data)
+{
+    if (gs_gnss_info.pos.pos_status == 'V')
+    {
+        return -1;
+    }
+
+    RTC_DateTypeDef rtc_date;
+    RTC_TimeTypeDef rtc_time;
+
+    // $GPZDA,104317.00,23,08,2021,,*6E
+    char *msg_ptr = NULL;
+    char *save_ptr = NULL;
+
+    msg_ptr = strtok_r((char *)data, ",", &save_ptr);   // msg_ptr-> $GPZDA
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 104317.00
+    gs_gnss_info.utc_time.utc_hh = (msg_ptr[0] - '0') * 10 + msg_ptr[1] - '0';
+    gs_gnss_info.utc_time.utc_mm = (msg_ptr[2] - '0') * 10 + msg_ptr[3] - '0';
+    gs_gnss_info.utc_time.utc_ss = (msg_ptr[4] - '0') * 10 + msg_ptr[5] - '0';
+
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 23
+    string_to_uint8(msg_ptr, &(gs_gnss_info.utc_time.utc_DD));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 08
+    string_to_uint8(msg_ptr, &(gs_gnss_info.utc_time.utc_MM));
+    msg_ptr = strtok_r(NULL, ",", &save_ptr);   // msg_ptr-> 2021
+    msg_ptr += 2;
+    string_to_uint8(msg_ptr, &(gs_gnss_info.utc_time.utc_YY));
+
+    // set rtc date and time
+    utc_to_timezone_time(&(gs_gnss_info.utc_time), 8);
+    rtc_date.Year    = gs_gnss_info.utc_time.utc_YY;
+    rtc_date.Month   = gs_gnss_info.utc_time.utc_MM;
+    rtc_date.Date    = gs_gnss_info.utc_time.utc_DD;
+    rtc_time.Hours   = gs_gnss_info.utc_time.utc_hh;
+    rtc_time.Minutes = gs_gnss_info.utc_time.utc_mm;
+    rtc_time.Seconds = gs_gnss_info.utc_time.utc_ss;
+
+    HAL_RTC_SetTime_and_Date(&rtc_date, &rtc_time);
+    return 0;
+}
+
+static nmea_msg_type_t get_nmea_msg_type(char *start_position)
+{
+    char header[7];
+    int header_len = 0;
+    nmea_msg_type_t msg_type = NMEA_UNKNOWN;
+    char *ptmp = NULL;
+
+    if ((ptmp = strchr(start_position, ',')) != NULL)
+    {
+        memset(header, 0x0, 7);
+        header_len = (int)(ptmp - start_position);
+        if (header_len >= 7)
+        {
+            PRINT_ERROR("nmea header %s len(%d) not right\n", start_position, header_len);
+            return -1;
+        }
+        memcpy(header, start_position, header_len);
+
+        // GNSS_DEBUG("nmea msg header is %s\n", header);
+        if ((strcmp(header, "GPGGA") == 0) || (strcmp(header, "GNGGA") == 0))
+        {
+            msg_type = NMEA_GGA;
+        }
+        else if ((strcmp(header, "GPGSV") == 0) || (strcmp(header, "BDGSV") == 0) || \
+                    (strcmp(header, "GLGSV") == 0) || (strcmp(header, "GAGSV") == 0) || (strcmp(header, "GNGSV") == 0))
+        {
+            msg_type = NMEA_GSV;
+        }
+        else if ((strcmp(header, "GPRMC") == 0) || (strcmp(header, "GNRMC") == 0))
+        {
+            msg_type = NMEA_RMC;
+        }
+        else if ((strcmp(header, "GPZDA") == 0) || (strcmp(header, "GNZDA") == 0))
+        {
+            msg_type = NMEA_ZDA;
+        }
+        else
+        {
+            // PRINT_WARN("unknown nmea header %s\n", header);
+            msg_type = NMEA_UNKNOWN;
+        }
+    }
+    return msg_type;
+}
+static int parse_one_nmea_message(char *msg)
+{
+    nmea_msg_type_t msg_type;
+//     char *p_start = NULL;
+    char *msg_tmp = NULL;
+    int ret = -1;
+
+    msg_tmp = msg;
+
+    // if ((p_start = strchr(msg_tmp, '$')) != NULL)
+    {
+        msg_type = get_nmea_msg_type(msg_tmp);
+
+        switch (msg_type)
+        {
+        case NMEA_GGA:
+            ret = parse_gga((uint8_t *)msg_tmp);
+            break;
+        case NMEA_GSV:
+            ret = parse_gsv((uint8_t *)msg_tmp);
+            break;
+        case NMEA_RMC:
+            // ret = parse_rmc((uint8_t *)msg_tmp);
+            ret = 0;
+            break;
+        case NMEA_ZDA:
+            ret = parse_zda((uint8_t *)msg_tmp);
+            break;
+        default:
+            ret = -1;
+            break;
+        }
+    }
+    return ret;
+}
+
+int parse_nmea_message(uint8_t *nmea_msg)
+{
+    // char *ptmp = NULL;
+
+		// ptmp = (char *)malloc(strlen((char *)nmea_msg));
+		// memcpy(ptmp, (char *)nmea_msg, strlen((char *)nmea_msg));
+	  //ptmp = strdup((const char *)nmea_msg);        // must be free !!!
+    if (nmea_msg == NULL)
+    {
+        PRINT_ERROR("strdup fail\n");
+        return -1;
+    }
+
+    char *msg_ptr = NULL;
+    char *save_ptr = NULL;
+
+    msg_ptr = strtok_r((char *)nmea_msg, "$", &save_ptr);
+    while(msg_ptr)
+    {
+        // PRINT_DEBUG("message = %s\n", msg_ptr);
+        parse_one_nmea_message(msg_ptr);
+        msg_ptr = strtok_r(NULL, "$", &save_ptr);
+    }
+
+    // free (ptmp);
+    return 0;
+}
+
+/* ------------get unix timestamp ---------------- */
+uint32_t get_unix_timestamp(void)
+{
+    struct tm tmp;
+    uint32_t timestamp;
+    RTC_DateTypeDef rtc_date;
+    RTC_TimeTypeDef rtc_time;
+
+    HAL_RTC_GetTime_and_Date(&rtc_date, &rtc_time);
+    
+    tmp.tm_year = rtc_date.Year + 100;
+    tmp.tm_mon  = rtc_date.Month - 1;
+    tmp.tm_mday = rtc_date.Date;
+    tmp.tm_hour = rtc_time.Hours;
+    tmp.tm_min  = rtc_time.Minutes;
+    tmp.tm_sec  = rtc_time.Seconds;
+
+    timestamp   = mktime(&tmp);
+
+    return timestamp;
+}
+
+/* ------------package acceleration data ---------------- */
+int package_xl355_raw_data(uint8_t *in_buf, uint8_t *out_buff, int data_len)
+{
+  	int pack_count = 0;
+    int pack_content_len = data_len + 9;
+    uint32_t adler32_check_sum = 0;
+    uint32_t microseconds = sys_run.unix_timestamp_micro_second;
+
+
+    out_buff[0] = 0xEF;
+    out_buff[1] = 0xEF;
+    out_buff[2] = ((pack_content_len & 0xFF000000) >> 24);
+    out_buff[3] = ((pack_content_len & 0x00FF0000) >> 16);
+    out_buff[4] = ((pack_content_len & 0x0000FF00) >> 8);
+    out_buff[5] = ((pack_content_len & 0x000000FF) >> 0);
+
+    out_buff[6] = ((sys_run.xl355_sync_flag == true) ? 0x01 : 0x00);
+
+    out_buff[7] = ((sys_run.unix_timestamp_second & 0xFF000000) >> 24);
+    out_buff[8] = ((sys_run.unix_timestamp_second & 0x00FF0000) >> 16);
+    out_buff[9] = ((sys_run.unix_timestamp_second & 0x0000FF00) >> 8);
+    out_buff[10] =((sys_run.unix_timestamp_second & 0x000000FF) >> 0);
+
+    out_buff[11] =((microseconds & 0xFF000000) >> 24);
+    out_buff[12] =((microseconds & 0x00FF0000) >> 16);
+    out_buff[13] =((microseconds & 0x0000FF00) >> 8);
+    out_buff[14] =((microseconds & 0x000000FF) >> 0);
+
+	  pack_count += 15;
+
+		memcpy(&out_buff[pack_count], in_buf, data_len);
+		pack_count += data_len;
+				
+		adler32_check_sum = adler32(out_buff, pack_count);
+    out_buff[pack_count+0] = ((adler32_check_sum & 0xFF000000) >> 24);
+    out_buff[pack_count+1] = ((adler32_check_sum & 0x00FF0000) >> 16);
+    out_buff[pack_count+2] = ((adler32_check_sum & 0x0000FF00) >> 8);
+    out_buff[pack_count+3] = ((adler32_check_sum & 0x000000FF) >> 0);
+		pack_count += 4;
+
+    return pack_count;
+}
 /* ------------my log function---------------- */
 #define MAX_ONE_LOG_SIZE   (250)									// length of one log message
-#define MAX_LOG_BUFF_SIZE  (MAX_ONE_LOG_SIZE * 20) // total buffer length of log
+#define MAX_LOG_BUFF_SIZE  (MAX_ONE_LOG_SIZE * 30) // total buffer length of log
 
 char log_msg_buf[MAX_LOG_BUFF_SIZE];
 char log_msg_send[MAX_LOG_BUFF_SIZE];
@@ -1273,7 +1941,7 @@ int log_message(log_level_e level, const char *level_str, const char *fmt, ...)
 
     len = snprintf(msg_buf, MAX_ONE_LOG_SIZE, "%4u/%02u/%02u %02u:%02u:%02u.%03u[%5.5s] ",
                                     (2000 + rtc_date.Year), rtc_date.Month, rtc_date.Date, \
-		rtc_time.Hours, rtc_time.Minutes, rtc_time.Seconds, 1000, level_str); // todo : how to get ms
+		rtc_time.Hours, rtc_time.Minutes, rtc_time.Seconds, ((sys_run.time_5ms_count%200) * 5), level_str); // todo : how to get ms
     va_start(ap, fmt);
     len += vsnprintf(&msg_buf[len], (MAX_ONE_LOG_SIZE - len), fmt, ap);
     va_end(ap);
@@ -1366,8 +2034,46 @@ void HAL_RTC_SetTime_and_Date(RTC_DateTypeDef *s_data, RTC_TimeTypeDef *s_time)
     HAL_RTC_SetDate(&hrtc, s_data, RTC_FORMAT_BIN);
 }
 
+/*-----------------led control function ------------------------*/
+int led_ctl(led_type_t name, led_ctl_t on_off)
+{
+  GPIO_TypeDef *GPIOx;
+  uint16_t pin;
 
+  if (name == SYNC_LED)
+  {
+      GPIOx = LED_SYNC_GPIO_Port;
+      pin = LED_SYNC_Pin;
+  }
+  else if (name == WORK_LED)
+  {
+      GPIOx = LED_RUN_GPIO_Port;
+      pin = LED_RUN_Pin;
+  }
+  else
+  {
+      return -1;
+  }
 
+  if (on_off == LED_ON)
+  {
+    HAL_GPIO_WritePin(GPIOx, pin, GPIO_PIN_RESET);
+  }
+  else if (on_off == LED_OFF)
+  {
+    HAL_GPIO_WritePin(GPIOx, pin, GPIO_PIN_SET);
+  }
+  else if (on_off == LED_TOGGLE)
+  {
+    HAL_GPIO_TogglePin(GPIOx, pin);
+  }
+  else
+  {
+    return -1;
+  }
+
+  return 0;
+}
 
 /* USER CODE END 4 */
 

@@ -37,5 +37,8 @@ stm32f103vct6_spi\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart
 stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\string.h
 stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\stdarg.h
 stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
+stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
+stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
+stm32f103vct6_spi\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\time.h
 stm32f103vct6_spi\main.o: ../Core/Inc/xl355.h
 stm32f103vct6_spi\main.o: ../Core/Inc/ubx.h

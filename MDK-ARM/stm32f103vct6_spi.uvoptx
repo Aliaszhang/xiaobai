@@ -157,18 +157,34 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
-          <LineNumber>188</LineNumber>
+          <LineNumber>242</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134240384</Address>
+          <Address>0</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
+          <BreakIfRCount>0</BreakIfRCount>
           <Filename>../Core/Src/main.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\stm32f103vct6_spi\../Core/Src/main.c\188</Expression>
+          <Expression></Expression>
+        </Bp>
+        <Bp>
+          <Number>1</Number>
+          <Type>0</Type>
+          <LineNumber>315</LineNumber>
+          <EnabledFlag>1</EnabledFlag>
+          <Address>0</Address>
+          <ByteObject>0</ByteObject>
+          <HtxType>0</HtxType>
+          <ManyObjects>0</ManyObjects>
+          <SizeOfObject>0</SizeOfObject>
+          <BreakByAccess>0</BreakByAccess>
+          <BreakIfRCount>0</BreakIfRCount>
+          <Filename>startup_stm32f103xe.s</Filename>
+          <ExecCommand></ExecCommand>
+          <Expression></Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>
@@ -191,6 +207,16 @@
           <count>3</count>
           <WinNumber>1</WinNumber>
           <ItemText>buf</ItemText>
+        </Ww>
+        <Ww>
+          <count>4</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>sys_run.start_sync_flag</ItemText>
+        </Ww>
+        <Ww>
+          <count>5</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>sys_run</ItemText>
         </Ww>
       </WatchWindow1>
       <Tracepoint>

@@ -34,6 +34,9 @@ extern "C" {
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <time.h>
 #include "xl355.h"
 /* USER CODE END Includes */
 

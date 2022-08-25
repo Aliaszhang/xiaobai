@@ -66,6 +66,8 @@ extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
 /* USER CODE BEGIN EV */
 
+extern void ubx_uart_recv_data_callback(UART_HandleTypeDef *huart);
+
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -325,7 +327,7 @@ void USART1_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
-
+  ubx_uart_recv_data_callback(&huart2);
   /* USER CODE END USART2_IRQn 0 */
   HAL_UART_IRQHandler(&huart2);
   /* USER CODE BEGIN USART2_IRQn 1 */
