@@ -3,9 +3,9 @@
 <title>Static Call Graph - [stm32f103vct6_spi\stm32f103vct6_spi.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image stm32f103vct6_spi\stm32f103vct6_spi.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060020: Last Updated: Thu Aug 25 15:29:27 2022
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060020: Last Updated: Thu Aug 25 15:52:58 2022
 <BR><P>
-<H3>Maximum Stack Usage =        600 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
+<H3>Maximum Stack Usage =        592 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
 __rt_entry_main &rArr; main &rArr; ubx_init &rArr; log_message &rArr; __2snprintf &rArr; _printf_char_common &rArr; __printf
 <P>
@@ -393,7 +393,7 @@ Global Symbols
 <P><STRONG><a name="[1a7]"></a>__rt_entry_postsh_1</STRONG> (Thumb, 0 bytes, Stack size unknown bytes, __rtentry2.o(.ARM.Collect$$rtentry$$00000009))
 
 <P><STRONG><a name="[88]"></a>__rt_entry_main</STRONG> (Thumb, 0 bytes, Stack size unknown bytes, __rtentry2.o(.ARM.Collect$$rtentry$$0000000D))
-<BR><BR>[Stack]<UL><LI>Max Depth = 600 + Unknown Stack Size
+<BR><BR>[Stack]<UL><LI>Max Depth = 592 + Unknown Stack Size
 <LI>Call Chain = __rt_entry_main &rArr; main &rArr; ubx_init &rArr; log_message &rArr; __2snprintf &rArr; _printf_char_common &rArr; __printf
 </UL>
 <BR>[Calls]<UL><LI><a href="#[89]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
@@ -2209,8 +2209,8 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[89]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
 </UL>
 
-<P><STRONG><a name="[89]"></a>main</STRONG> (Thumb, 1448 bytes, Stack size 40 bytes, main.o(i.main))
-<BR><BR>[Stack]<UL><LI>Max Depth = 600 + Unknown Stack Size
+<P><STRONG><a name="[89]"></a>main</STRONG> (Thumb, 1448 bytes, Stack size 32 bytes, main.o(i.main))
+<BR><BR>[Stack]<UL><LI>Max Depth = 592 + Unknown Stack Size
 <LI>Call Chain = main &rArr; ubx_init &rArr; log_message &rArr; __2snprintf &rArr; _printf_char_common &rArr; __printf
 </UL>
 <BR>[Calls]<UL><LI><a href="#[130]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_UART_Transmit_DMA

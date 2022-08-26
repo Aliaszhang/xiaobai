@@ -2626,19 +2626,19 @@ Image Symbol Table
     .constdata                               0x080082c0   Section      148  bigflt0.o(.constdata)
     tenpwrs_x                                0x080082c0   Data          60  bigflt0.o(.constdata)
     tenpwrs_i                                0x080082fc   Data          64  bigflt0.o(.constdata)
-    .conststring                             0x08008354   Section      229  main.o(.conststring)
-    c$$dinf                                  0x0800845c   Section        8  fpconst.o(c$$dinf)
-    locale$$data                             0x08008464   Section      272  lc_ctype_c.o(locale$$data)
-    __lcctype_c_name                         0x08008468   Data           2  lc_ctype_c.o(locale$$data)
-    __lcctype_c_start                        0x08008470   Data           0  lc_ctype_c.o(locale$$data)
-    locale$$data                             0x08008574   Section       28  lc_numeric_c.o(locale$$data)
-    __lcctype_c_end                          0x08008574   Data           0  lc_ctype_c.o(locale$$data)
-    __lcnum_c_name                           0x08008578   Data           2  lc_numeric_c.o(locale$$data)
-    __lcnum_c_start                          0x08008580   Data           0  lc_numeric_c.o(locale$$data)
-    __lcnum_c_point                          0x0800858c   Data           0  lc_numeric_c.o(locale$$data)
-    __lcnum_c_thousands                      0x0800858e   Data           0  lc_numeric_c.o(locale$$data)
-    __lcnum_c_grouping                       0x0800858f   Data           0  lc_numeric_c.o(locale$$data)
-    __lcnum_c_end                            0x08008590   Data           0  lc_numeric_c.o(locale$$data)
+    .conststring                             0x08008354   Section      223  main.o(.conststring)
+    c$$dinf                                  0x08008454   Section        8  fpconst.o(c$$dinf)
+    locale$$data                             0x0800845c   Section      272  lc_ctype_c.o(locale$$data)
+    __lcctype_c_name                         0x08008460   Data           2  lc_ctype_c.o(locale$$data)
+    __lcctype_c_start                        0x08008468   Data           0  lc_ctype_c.o(locale$$data)
+    locale$$data                             0x0800856c   Section       28  lc_numeric_c.o(locale$$data)
+    __lcctype_c_end                          0x0800856c   Data           0  lc_ctype_c.o(locale$$data)
+    __lcnum_c_name                           0x08008570   Data           2  lc_numeric_c.o(locale$$data)
+    __lcnum_c_start                          0x08008578   Data           0  lc_numeric_c.o(locale$$data)
+    __lcnum_c_point                          0x08008584   Data           0  lc_numeric_c.o(locale$$data)
+    __lcnum_c_thousands                      0x08008586   Data           0  lc_numeric_c.o(locale$$data)
+    __lcnum_c_grouping                       0x08008587   Data           0  lc_numeric_c.o(locale$$data)
+    __lcnum_c_end                            0x08008588   Data           0  lc_numeric_c.o(locale$$data)
     .data                                    0x20000000   Section       48  main.o(.data)
     .data                                    0x20000030   Section       12  stm32f1xx_hal.o(.data)
     .data                                    0x2000003c   Section        4  system_stm32f1xx.o(.data)
@@ -3095,14 +3095,14 @@ Image Symbol Table
     AHBPrescTable                            0x08008230   Data          16  system_stm32f1xx.o(.constdata)
     APBPrescTable                            0x08008240   Data           8  system_stm32f1xx.o(.constdata)
     _monlen                                  0x0800828c   Data          12  _monlen.o(.constdata)
-    Region$$Table$$Base                      0x0800843c   Number         0  anon$$obj.o(Region$$Table)
-    Region$$Table$$Limit                     0x0800845c   Number         0  anon$$obj.o(Region$$Table)
-    __aeabi_HUGE_VAL                         0x0800845c   Data           0  fpconst.o(c$$dinf)
-    __aeabi_HUGE_VALL                        0x0800845c   Data           0  fpconst.o(c$$dinf)
-    __aeabi_INFINITY                         0x0800845c   Data           0  fpconst.o(c$$dinf)
-    __dInf                                   0x0800845c   Data           0  fpconst.o(c$$dinf)
-    __huge_val                               0x0800845c   Data           0  fpconst.o(c$$dinf)
-    __ctype                                  0x08008471   Data           0  lc_ctype_c.o(locale$$data)
+    Region$$Table$$Base                      0x08008434   Number         0  anon$$obj.o(Region$$Table)
+    Region$$Table$$Limit                     0x08008454   Number         0  anon$$obj.o(Region$$Table)
+    __aeabi_HUGE_VAL                         0x08008454   Data           0  fpconst.o(c$$dinf)
+    __aeabi_HUGE_VALL                        0x08008454   Data           0  fpconst.o(c$$dinf)
+    __aeabi_INFINITY                         0x08008454   Data           0  fpconst.o(c$$dinf)
+    __dInf                                   0x08008454   Data           0  fpconst.o(c$$dinf)
+    __huge_val                               0x08008454   Data           0  fpconst.o(c$$dinf)
+    __ctype                                  0x08008469   Data           0  lc_ctype_c.o(locale$$data)
     log_msg_len                              0x20000000   Data           2  main.o(.data)
     xl355_fifo_full_flag                     0x20000004   Data           4  main.o(.data)
     msg_len                                  0x20000008   Data           4  main.o(.data)
@@ -3146,9 +3146,9 @@ Memory Map of the image
 
   Image Entry point : 0x08000131
 
-  Load Region LR_IROM1 (Base: 0x08000000, Size: 0x000085d0, Max: 0x00040000, ABSOLUTE)
+  Load Region LR_IROM1 (Base: 0x08000000, Size: 0x000085c8, Max: 0x00040000, ABSOLUTE)
 
-    Execution Region ER_IROM1 (Exec base: 0x08000000, Load base: 0x08000000, Size: 0x00008590, Max: 0x00040000, ABSOLUTE)
+    Execution Region ER_IROM1 (Exec base: 0x08000000, Load base: 0x08000000, Size: 0x00008588, Max: 0x00040000, ABSOLUTE)
 
     Exec Addr    Load Addr    Size         Type   Attr      Idx    E Section Name        Object
 
@@ -3538,21 +3538,21 @@ Memory Map of the image
     0x08008298   0x08008298   0x00000026   Data   RO         4555    .constdata          c_w.l(_printf_fp_hex.o)
     0x080082be   0x080082be   0x00000002   PAD
     0x080082c0   0x080082c0   0x00000094   Data   RO         4586    .constdata          c_w.l(bigflt0.o)
-    0x08008354   0x08008354   0x000000e5   Data   RO           62    .conststring        main.o
-    0x08008439   0x08008439   0x00000003   PAD
-    0x0800843c   0x0800843c   0x00000020   Data   RO         4816    Region$$Table       anon$$obj.o
-    0x0800845c   0x0800845c   0x00000008   Data   RO         4671    c$$dinf             fz_ws.l(fpconst.o)
-    0x08008464   0x08008464   0x00000110   Data   RO         4567    locale$$data        c_w.l(lc_ctype_c.o)
-    0x08008574   0x08008574   0x0000001c   Data   RO         4570    locale$$data        c_w.l(lc_numeric_c.o)
+    0x08008354   0x08008354   0x000000df   Data   RO           62    .conststring        main.o
+    0x08008433   0x08008433   0x00000001   PAD
+    0x08008434   0x08008434   0x00000020   Data   RO         4816    Region$$Table       anon$$obj.o
+    0x08008454   0x08008454   0x00000008   Data   RO         4671    c$$dinf             fz_ws.l(fpconst.o)
+    0x0800845c   0x0800845c   0x00000110   Data   RO         4567    locale$$data        c_w.l(lc_ctype_c.o)
+    0x0800856c   0x0800856c   0x0000001c   Data   RO         4570    locale$$data        c_w.l(lc_numeric_c.o)
 
 
-    Execution Region RW_IRAM1 (Exec base: 0x20000000, Load base: 0x08008590, Size: 0x00008228, Max: 0x0000c000, ABSOLUTE)
+    Execution Region RW_IRAM1 (Exec base: 0x20000000, Load base: 0x08008588, Size: 0x00008228, Max: 0x0000c000, ABSOLUTE)
 
     Exec Addr    Load Addr    Size         Type   Attr      Idx    E Section Name        Object
 
-    0x20000000   0x08008590   0x00000030   Data   RW           63    .data               main.o
-    0x20000030   0x080085c0   0x0000000c   Data   RW          990    .data               stm32f1xx_hal.o
-    0x2000003c   0x080085cc   0x00000004   Data   RW         4300    .data               system_stm32f1xx.o
+    0x20000000   0x08008588   0x00000030   Data   RW           63    .data               main.o
+    0x20000030   0x080085b8   0x0000000c   Data   RW          990    .data               stm32f1xx_hal.o
+    0x2000003c   0x080085c4   0x00000004   Data   RW         4300    .data               system_stm32f1xx.o
     0x20000040        -       0x00007a78   Zero   RW           55    .bss                main.o
     0x20007ab8        -       0x00000044   Zero   RW           57    .bss                main.o
     0x20007afc        -       0x00000044   Zero   RW           58    .bss                main.o
@@ -3570,7 +3570,7 @@ Image component sizes
 
       Code (inc. data)   RO Data    RW Data    ZI Data      Debug   Object Name
 
-      7490       2146        261         48      31624     556956   main.o
+      7490       2148        255         48      31624     556956   main.o
         64         26        304          0       1536        784   startup_stm32f103xe.o
        164         28          0         12          0       6305   stm32f1xx_hal.o
        630         28          0          0          0       3248   stm32f1xx_hal_adc.o
@@ -3592,9 +3592,9 @@ Image component sizes
          2          0         24          4          0       1035   system_stm32f1xx.o
 
     ----------------------------------------------------------------------
-     20142       2810        624         64      33160     683630   Object Totals
+     20142       2812        616         64      33160     683630   Object Totals
          0          0         32          0          0          0   (incl. Generated)
-        32          0          3          0          0          0   (incl. Padding)
+        32          0          1          0          0          0   (incl. Padding)
 
     ----------------------------------------------------------------------
 
@@ -3751,15 +3751,15 @@ Image component sizes
 
       Code (inc. data)   RO Data    RW Data    ZI Data      Debug   
 
-     32992       3216       1200         64      33256     678586   Grand Totals
-     32992       3216       1200         64      33256     678586   ELF Image Totals
-     32992       3216       1200         64          0          0   ROM Totals
+     32992       3218       1192         64      33256     678586   Grand Totals
+     32992       3218       1192         64      33256     678586   ELF Image Totals
+     32992       3218       1192         64          0          0   ROM Totals
 
 ==============================================================================
 
-    Total RO  Size (Code + RO Data)                34192 (  33.39kB)
+    Total RO  Size (Code + RO Data)                34184 (  33.38kB)
     Total RW  Size (RW Data + ZI Data)             33320 (  32.54kB)
-    Total ROM Size (Code + RO Data + RW Data)      34256 (  33.45kB)
+    Total ROM Size (Code + RO Data + RW Data)      34248 (  33.45kB)
 
 ==============================================================================
 

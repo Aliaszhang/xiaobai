@@ -283,6 +283,7 @@ int main(void)
 
   ubx_reset();
   HAL_Delay(100);  // wait for UBX start work
+  HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
 	ubx_init();
 
   adxl355_init(XL355_RANGE_2G, XL355_ODR_2000HZ, XL355_FIFO_SAMPLE_90, XL355_EXT_SYNC01);
@@ -344,10 +345,12 @@ int main(void)
         sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
 
         // PRINT_DEBUG("time:%u.%06u send %d bytes to uart\r\n", sys_run.unix_timestamp_second, sys_run.unix_timestamp_micro_second, package_len);
-        PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355_%04d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, count, \
+        PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355 accx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, \
             adxl355_conversion_acc_data(&spi_send_array_bak[15]), \
             adxl355_conversion_acc_data(&spi_send_array_bak[18]), \
             adxl355_conversion_acc_data(&spi_send_array_bak[21]));
+
+        HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
 			}
 			xl355_fifo_full_flag = 0;
     }
@@ -357,7 +360,7 @@ int main(void)
     {
       sys_run.pps_flag = false;
       led_ctl(WORK_LED, LED_TOGGLE); // 翻转 LED工作灯
-
+      
       // check if we have done sync
       if (sys_run.xl355_sync_flag == false)
       {
