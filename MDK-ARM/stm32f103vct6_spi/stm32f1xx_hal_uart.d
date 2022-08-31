@@ -30,6 +30,4 @@ stm32f103vct6_spi\stm32f1xx_hal_uart.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm3
 stm32f103vct6_spi\stm32f1xx_hal_uart.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rtc.h
 stm32f103vct6_spi\stm32f1xx_hal_uart.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rtc_ex.h
 stm32f103vct6_spi\stm32f1xx_hal_uart.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_spi.h
-stm32f103vct6_spi\stm32f1xx_hal_uart.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
-stm32f103vct6_spi\stm32f1xx_hal_uart.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 stm32f103vct6_spi\stm32f1xx_hal_uart.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h

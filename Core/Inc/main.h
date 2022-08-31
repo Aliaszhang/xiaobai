@@ -83,12 +83,22 @@ void Error_Handler(void);
 #define LED_RUN_GPIO_Port GPIOE
 #define WATCHDOG_Pin GPIO_PIN_2
 #define WATCHDOG_GPIO_Port GPIOC
+#define VCCA_3V3_Pin GPIO_PIN_1
+#define VCCA_3V3_GPIO_Port GPIOA
 #define GPS_UART_RX_Pin GPIO_PIN_2
 #define GPS_UART_RX_GPIO_Port GPIOA
 #define GPS_UART_TX_Pin GPIO_PIN_3
 #define GPS_UART_TX_GPIO_Port GPIOA
 #define XL355_SPI_CS_Pin GPIO_PIN_4
 #define XL355_SPI_CS_GPIO_Port GPIOA
+#define SC200R_4V5_Pin GPIO_PIN_4
+#define SC200R_4V5_GPIO_Port GPIOC
+#define VCC_SYS_Pin GPIO_PIN_5
+#define VCC_SYS_GPIO_Port GPIOC
+#define GPS_3V3_Pin GPIO_PIN_0
+#define GPS_3V3_GPIO_Port GPIOB
+#define SENSOR_3V3_Pin GPIO_PIN_1
+#define SENSOR_3V3_GPIO_Port GPIOB
 #define SC200R_UART_TX_Pin GPIO_PIN_10
 #define SC200R_UART_TX_GPIO_Port GPIOB
 #define SC200R_UART_RX_Pin GPIO_PIN_11
@@ -119,6 +129,10 @@ void Error_Handler(void);
 #define XL355_EN_GPIO_Port GPIOD
 #define SC200R_PW_EN_Pin GPIO_PIN_6
 #define SC200R_PW_EN_GPIO_Port GPIOD
+#define AHT_SCL_Pin GPIO_PIN_8
+#define AHT_SCL_GPIO_Port GPIOB
+#define AHT_SDA_Pin GPIO_PIN_9
+#define AHT_SDA_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 

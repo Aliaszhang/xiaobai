@@ -43,9 +43,9 @@
 
 // 接收ubx数据的串口buffer
 #define UART_RX_MAX_LEN (3000u)
-// 时区设置为 +0
+// set timezone +0
 #define TIME_ZONE 0
-// 震动数据接收缓存，每个点9byte， 收满500个点发送一次
+// 震动数据接收缓存，每个点9bytes, 收满500个点发送一次数据
 // 200是为添加的包头和校验码留的空间
 #define  ARRAYSIZE         (XL355_SAMPLE_COUNT + 200)
 typedef enum {
@@ -108,8 +108,8 @@ typedef struct
 {
     char    lat_dir;         // 纬度方向(N:北纬,S:南纬)
     char    lon_dir;         // 经度方向(E:东经,W:西经)
-    char    var_dir;          // 磁偏角方向,E/W
-    char    pos_status;      // 定位状态:A=有效定位, V=无效定位
+    char    var_dir;          // 磁偏角方角,E/W
+    char    pos_status;      // 定位状太:A=有效定位, V=无效定位
     char    mode_ind;        // 定位模式指示
     char    a_units;         // 天线高单位,m
     uint8_t gps_qual;        // 解状态, 1:GPS 定位; 4:RTK 固定解; 5:RTK 浮点解
@@ -117,7 +117,7 @@ typedef struct
     uint8_t gp_obs_sats;     // gps 卫星数
     uint8_t bd_obs_sats;     // bd  卫星数
     uint8_t gl_obs_sats;     // glo 卫星数
-    uint8_t ga_obs_sats;     // gal 卫星书
+    uint8_t ga_obs_sats;     // gal 卫星数
     float   alt;             // 天线高度(海平面以上或以下)
     float   speed;           // 地面速率
     float   track_true;      // 地面航向,以真北方向为基准
@@ -131,10 +131,21 @@ typedef struct
     gps_time_t utc_time;
     position_info_t pos;
 }gnss_info_t;
+
+typedef struct {
+	float vcca_3v3;
+	float vcc_sys;
+	float sensor_3v3;
+	float gps_3v3;
+	float sc200r_4v5;
+	float mcu_temperature;
+	float mcu_vcc_ref;
+}sys_power_info_t;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
  ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
 
 I2C_HandleTypeDef hi2c1;
 
@@ -142,8 +153,8 @@ RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi3;
-
-TIM_HandleTypeDef htim1;
+DMA_HandleTypeDef hdma_spi3_tx;
+DMA_HandleTypeDef hdma_spi3_rx;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
@@ -159,9 +170,9 @@ uint32_t int_device_memery_info;
 
 // 接收震动数据的buffer
 uint8_t spi_send_array[ARRAYSIZE] = {0};
-// 发送震动数据的buffer
+// 发�?�震动数据的buffer
 uint8_t spi_send_array_bak[ARRAYSIZE] = {0};
-// 从xl355寄存器读一次温度传感器和 xyz 3轴的震动数据用的buffer
+// 从xl355寄存器读一次温度传感器的 xyz 3轴的震动数据用的buffer
 uint8_t spi_read_reg_array[12] = {0}; 
 
 int xl355_fifo_full_flag = 0;
@@ -177,6 +188,11 @@ uart_rx_t ubx_rx_buffer;
 sys_run_mark_t sys_run;
 // 从ubx解析出来的信息，包括经纬度，时间，卫星数
 gnss_info_t gs_gnss_info;
+
+// adc 采样原始率
+uint32_t adc_value[7] = {0};
+// adc 处理后的实际电压值
+sys_power_info_t sys_power;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -189,7 +205,6 @@ static void MX_I2C1_Init(void);
 static void MX_RTC_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_SPI3_Init(void);
-static void MX_TIM1_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
@@ -216,6 +231,7 @@ int ubx_msg_generate(uint8_t msg_class, uint8_t msg_id, const unsigned char *dat
 int parse_nmea_message(uint8_t *nmea_msg);
 int package_xl355_raw_data(uint8_t *in_buf, uint8_t *out_buff, int data_len);
 uint32_t get_unix_timestamp(void);
+void transform_adc_to_real_value(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -260,7 +276,6 @@ int main(void)
   MX_RTC_Init();
   MX_SPI1_Init();
   MX_SPI3_Init();
-  MX_TIM1_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
@@ -281,12 +296,16 @@ int main(void)
 	/* printf sdram and flash size */
 	PRINT_INFO("The Flash size:%uKBytes, SRAM size:%uKBytes\r\n", (int_device_memery_info & 0xFFFF), (int_device_memery_info >> 16 & 0xFFFF));
 
+	HAL_ADCEx_Calibration_Start(&hadc1);
+
   ubx_reset();
   HAL_Delay(100);  // wait for UBX start work
   HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
 	ubx_init();
 
   adxl355_init(XL355_RANGE_2G, XL355_ODR_2000HZ, XL355_FIFO_SAMPLE_90, XL355_EXT_SYNC01);
+  
+  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)&adc_value, 7);
   adxl355_start_work();
 
   log_print();
@@ -345,10 +364,15 @@ int main(void)
         sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
 
         // PRINT_DEBUG("time:%u.%06u send %d bytes to uart\r\n", sys_run.unix_timestamp_second, sys_run.unix_timestamp_micro_second, package_len);
-        PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355 accx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, \
+        /*PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355 accx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, \
             adxl355_conversion_acc_data(&spi_send_array_bak[15]), \
             adxl355_conversion_acc_data(&spi_send_array_bak[18]), \
-            adxl355_conversion_acc_data(&spi_send_array_bak[21]));
+            adxl355_conversion_acc_data(&spi_send_array_bak[21]));*/
+				
+				transform_adc_to_real_value();
+        PRINT_DEBUG("mcu: vcca_3v3=%fv\tgps_3v3=%fv\tsensor_3v3=%fv\tsc200r_4v5=%fv\tvcc_sys=%fv\tmcu_temp=%f°C\tmcu_ref=%fv\r\n", \
+                  sys_power.vcca_3v3, sys_power.gps_3v3, sys_power.sensor_3v3, sys_power.sc200r_4v5, sys_power.vcc_sys,\
+                  sys_power.mcu_temperature, sys_power.mcu_vcc_ref);
 
         HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
 			}
@@ -361,6 +385,11 @@ int main(void)
       sys_run.pps_flag = false;
       led_ctl(WORK_LED, LED_TOGGLE); // 翻转 LED工作灯
       
+      /*transform_adc_to_real_value();
+      PRINT_DEBUG("mcu: vcca_3v3=%fv\tgps_3v3=%fv\tsensor_3v3=%fv\tsc200r_4v5=%fv\tvcc_sys=%fv\tmcu_temp=%f°C\tmcu_ref=%fv\r\n", \
+                  sys_power.vcca_3v3, sys_power.gps_3v3, sys_power.sensor_3v3, sys_power.sc200r_4v5, sys_power.vcc_sys,\
+                  sys_power.mcu_temperature, sys_power.mcu_vcc_ref);*/
+
       // check if we have done sync
       if (sys_run.xl355_sync_flag == false)
       {
@@ -511,12 +540,12 @@ static void MX_ADC1_Init(void)
   /** Common config
   */
   hadc1.Instance = ADC1;
-  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.NbrOfConversion = 7;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
     Error_Handler();
@@ -524,9 +553,63 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_8;
+  sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_8;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_9;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_14;
+  sConfig.Rank = ADC_REGULAR_RANK_4;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_15;
+  sConfig.Rank = ADC_REGULAR_RANK_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
+  sConfig.Rank = ADC_REGULAR_RANK_6;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
+  sConfig.Rank = ADC_REGULAR_RANK_7;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -708,52 +791,6 @@ static void MX_SPI3_Init(void)
 }
 
 /**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-
-}
-
-/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -860,8 +897,12 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA1_CLK_ENABLE();
+  __HAL_RCC_DMA2_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
   /* DMA1_Channel2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
@@ -874,6 +915,12 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel7_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
+  /* DMA2_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Channel1_IRQn);
+  /* DMA2_Channel2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Channel2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Channel2_IRQn);
 
 }
 
@@ -2085,6 +2132,19 @@ int led_ctl(led_type_t name, led_ctl_t on_off)
   }
 
   return 0;
+}
+
+/*------------ adc --------------------*/
+void transform_adc_to_real_value(void)
+{
+  sys_power.vcca_3v3 = adc_value[0] * 3.3 / 4096 * 2;
+  sys_power.gps_3v3  = adc_value[1] * 3.3 / 4096 * 2;
+  sys_power.sensor_3v3 = adc_value[2] * 3.3 / 4096 * 2;
+  sys_power.sc200r_4v5 = adc_value[3] * 3.3 / 4096 * 2;
+  sys_power.vcc_sys = adc_value[4] * 3.3 / 4096 * (100+10.2) / 10.2;
+
+  sys_power.mcu_temperature = ((1.43 - (adc_value[5] * 3.3 / 4096))/0.0043) + 25.0 ;
+  sys_power.mcu_vcc_ref = adc_value[6] * 3.3 / 4096;
 }
 
 /* USER CODE END 4 */
