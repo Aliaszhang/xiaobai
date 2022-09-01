@@ -190,7 +190,7 @@ sys_run_mark_t sys_run;
 gnss_info_t gs_gnss_info;
 
 // adc 采样原始率
-uint32_t adc_value[7] = {0};
+uint16_t adc_value[70] = {0};
 // adc 处理后的实际电压值
 sys_power_info_t sys_power;
 /* USER CODE END PV */
@@ -305,7 +305,7 @@ int main(void)
 
   adxl355_init(XL355_RANGE_2G, XL355_ODR_2000HZ, XL355_FIFO_SAMPLE_90, XL355_EXT_SYNC01);
   
-  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)&adc_value, 7);
+  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)&adc_value, 70);
   adxl355_start_work();
 
   log_print();
@@ -347,6 +347,7 @@ int main(void)
       //             adxl355_conversion_acc_data(&spi_send_array[count+3]), \
       //             adxl355_conversion_acc_data(&spi_send_array[count+6]));
 
+							
 			count += XL355_FIFO_SAMPLE_90;
 			if (count >= XL355_SAMPLE_COUNT)
 			{
@@ -364,15 +365,10 @@ int main(void)
         sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
 
         // PRINT_DEBUG("time:%u.%06u send %d bytes to uart\r\n", sys_run.unix_timestamp_second, sys_run.unix_timestamp_micro_second, package_len);
-        /*PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355 accx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, \
+        PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355 accx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, \
             adxl355_conversion_acc_data(&spi_send_array_bak[15]), \
             adxl355_conversion_acc_data(&spi_send_array_bak[18]), \
-            adxl355_conversion_acc_data(&spi_send_array_bak[21]));*/
-				
-				transform_adc_to_real_value();
-        PRINT_DEBUG("mcu: vcca_3v3=%fv\tgps_3v3=%fv\tsensor_3v3=%fv\tsc200r_4v5=%fv\tvcc_sys=%fv\tmcu_temp=%f°C\tmcu_ref=%fv\r\n", \
-                  sys_power.vcca_3v3, sys_power.gps_3v3, sys_power.sensor_3v3, sys_power.sc200r_4v5, sys_power.vcc_sys,\
-                  sys_power.mcu_temperature, sys_power.mcu_vcc_ref);
+            adxl355_conversion_acc_data(&spi_send_array_bak[21]));
 
         HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
 			}
@@ -448,8 +444,14 @@ int main(void)
     }
     if (sys_run.time_5ms_count >= 60000) // 5 minutes
     {
+  		transform_adc_to_real_value();
+      PRINT_DEBUG("mcu: vcca_3v3=%fv\tgps_3v3=%fv\tsensor_3v3=%fv\tsc200r_4v5=%fv\tvcc_sys=%fv\tmcu_temp=%f°C\tmcu_ref=%fv\r\n", \
+            sys_power.vcca_3v3, sys_power.gps_3v3, sys_power.sensor_3v3, sys_power.sc200r_4v5, sys_power.vcc_sys,\
+            sys_power.mcu_temperature, sys_power.mcu_vcc_ref);
+			
       sys_run.time_5ms_count = 0;
     }
+					
     log_print();
 	}
 
@@ -2137,14 +2139,36 @@ int led_ctl(led_type_t name, led_ctl_t on_off)
 /*------------ adc --------------------*/
 void transform_adc_to_real_value(void)
 {
-  sys_power.vcca_3v3 = adc_value[0] * 3.3 / 4096 * 2;
-  sys_power.gps_3v3  = adc_value[1] * 3.3 / 4096 * 2;
-  sys_power.sensor_3v3 = adc_value[2] * 3.3 / 4096 * 2;
-  sys_power.sc200r_4v5 = adc_value[3] * 3.3 / 4096 * 2;
-  sys_power.vcc_sys = adc_value[4] * 3.3 / 4096 * (100+10.2) / 10.2;
+	uint32_t tmp[7] = {0};
+	uint8_t i;
+	
+	for (i = 0; i < 70; i += 7)
+	{
+		tmp[0] += (adc_value[i] & 0xFFFF);
+		tmp[1] += (adc_value[i+1] & 0xFFFF);
+		tmp[2] += (adc_value[i+2] & 0xFFF);
+		tmp[3] += (adc_value[i+3] & 0xFFF);
+		tmp[4] += (adc_value[i+4] & 0xFFF);
+		tmp[5] += (adc_value[i+5] & 0xFFF);
+		tmp[6] += (adc_value[i+6] & 0xFFF);
+	}
+	
+	tmp[0] /= 10;
+	tmp[1] /= 10;
+	tmp[2] /= 10;
+	tmp[3] /= 10;
+	tmp[4] /= 10;
+	tmp[5] /= 10;
+	tmp[6] /= 10;
+	
+  sys_power.vcca_3v3 = tmp[0] * 3.3 / 4096 * 2;
+  sys_power.gps_3v3  = tmp[1] * 3.3 / 4096 * 2;
+  sys_power.sensor_3v3 = tmp[2] * 3.3 / 4096 * 2;
+  sys_power.sc200r_4v5 = tmp[3] * 3.3 / 4096 * 2;
+  sys_power.vcc_sys = tmp[4] * 3.3 / 4096 * (100+10.2) / 10.2;
 
-  sys_power.mcu_temperature = ((1.43 - (adc_value[5] * 3.3 / 4096))/0.0043) + 25.0 ;
-  sys_power.mcu_vcc_ref = adc_value[6] * 3.3 / 4096;
+  sys_power.mcu_temperature = ((1.43 - (tmp[5] * 3.3 / 4096)) / 0.0043) + 25.0 ;
+  sys_power.mcu_vcc_ref = tmp[6] * 3.3 / 4096;
 }
 
 /* USER CODE END 4 */
