@@ -232,6 +232,9 @@ int parse_nmea_message(uint8_t *nmea_msg);
 int package_xl355_raw_data(uint8_t *in_buf, uint8_t *out_buff, int data_len);
 uint32_t get_unix_timestamp(void);
 void transform_adc_to_real_value(void);
+int spi_slave_read_multiple_bytes(uint8_t *buf, uint16_t len);
+int spi_slave_write_multiple_bytes(uint8_t *buf, uint16_t len);
+int spi_slave_read_write_multiple_bytes(uint8_t *send_buff, uint8_t *read_buff, uint16_t len);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -324,29 +327,27 @@ int main(void)
 	{
 		if (xl355_fifo_full_flag > 0)
     {
-      // memset(spi_read_reg_array, 0x0, 12);
-      // ret = spi_read_multipe_bytes(XL355_TEMP2, &spi_read_reg_array[0], 11);
+#if 0
+      // 读取温度和xyz三轴寄存器数据
+      memset(spi_read_reg_array, 0x0, 12);
+      ret = spi_read_multipe_bytes(XL355_TEMP2, &spi_read_reg_array[0], 11);
 
-      // PRINT_DEBUG("adxl355: temp:%0.2f\t\taccx:%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", \
-			// 					adxl355_conversion_temperature(&spi_read_reg_array[0]), adxl355_conversion_acc_data(&spi_read_reg_array[2]), \
-			// 					adxl355_conversion_acc_data(&spi_read_reg_array[5]), adxl355_conversion_acc_data(&spi_read_reg_array[8]));
-     
+      PRINT_DEBUG("adxl355: temp:%0.2f\t\taccx:%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", \
+								adxl355_conversion_temperature(&spi_read_reg_array[0]), adxl355_conversion_acc_data(&spi_read_reg_array[2]), \
+								adxl355_conversion_acc_data(&spi_read_reg_array[5]), adxl355_conversion_acc_data(&spi_read_reg_array[8]));
+#endif
       ret = spi_read_multipe_bytes(XL355_FIFO_DATA, &spi_send_array[count], XL355_FIFO_SAMPLE_90);
-
-      // for (i = (count+2); i < (count + XL355_FIFO_SAMPLE_90); i+=9)
-      // {
-      //     if ((spi_send_array[i] & 0x01) == 0x01)
-      //     {
-      //         PRINT_DEBUG("adxl355: %d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", i, \
-			// 				    adxl355_conversion_acc_data(&spi_send_array[i-2]), adxl355_conversion_acc_data(&spi_send_array[i+1]), adxl355_conversion_acc_data(&spi_send_array[i+4]));
-      //     }
-      // } 
-			
-      // PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355_%04d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, count, \
-      //             adxl355_conversion_acc_data(&spi_send_array[count]), \
-      //             adxl355_conversion_acc_data(&spi_send_array[count+3]), \
-      //             adxl355_conversion_acc_data(&spi_send_array[count+6]));
-
+#if 0
+      // 打印出从FIFO中读取并换算后的xyz三轴的数据
+      for (i = (count+2); i < (count + XL355_FIFO_SAMPLE_90); i+=9)
+      {
+          if ((spi_send_array[i] & 0x01) == 0x01)
+          {
+              PRINT_DEBUG("adxl355: %d\t\taccx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", i, \
+							    adxl355_conversion_acc_data(&spi_send_array[i-2]), adxl355_conversion_acc_data(&spi_send_array[i+1]), adxl355_conversion_acc_data(&spi_send_array[i+4]));
+          }
+      } 
+#endif
 							
 			count += XL355_FIFO_SAMPLE_90;
 			if (count >= XL355_SAMPLE_COUNT)
@@ -356,15 +357,17 @@ int main(void)
         package_len = package_xl355_raw_data(spi_send_array, spi_send_array_bak, count);
 
         if (package_len > 0)
-					HAL_UART_Transmit_DMA(&huart3, spi_send_array_bak, package_len);
-        
+        {
+          // HAL_UART_Transmit_DMA(&huart3, spi_send_array_bak, package_len);
+          spi_slave_write_multiple_bytes(spi_send_array_bak, package_len);
+        }
+
 				memset(spi_send_array, 0x0, ARRAYSIZE);
         count = 0 ;
 
         sys_run.unix_timestamp_second =  get_unix_timestamp();
         sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
 
-        // PRINT_DEBUG("time:%u.%06u send %d bytes to uart\r\n", sys_run.unix_timestamp_second, sys_run.unix_timestamp_micro_second, package_len);
         PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355 accx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, \
             adxl355_conversion_acc_data(&spi_send_array_bak[15]), \
             adxl355_conversion_acc_data(&spi_send_array_bak[18]), \
@@ -1139,6 +1142,35 @@ uint32_t adler32(uint8_t *buf, uint32_t len)
    return (s2 << 16) + s1;
 }
 
+/* ----------------------spi slave function------------------------------------*/
+int spi_slave_read_multiple_bytes(uint8_t *buf, uint16_t len)
+{
+  HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_SET);
+  if (HAL_SPI_Receive_DMA(&hspi3, buf, len) != HAL_OK)
+  {
+    PRINT_ERROR("spi slave recive dma failed\r\n");
+  }
+  HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_RESET);
+}
+int spi_slave_write_multiple_bytes(uint8_t *buf, uint16_t len)
+{
+  HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_SET);
+  if (HAL_SPI_Transmit_DMA(&hspi3, buf, len) != HAL_OK)
+  {
+    PRINT_ERROR("spi slave transmit dma failed\r\n");
+  }
+  HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_RESET);
+}
+int spi_slave_read_write_multiple_bytes(uint8_t *send_buff, uint8_t *read_buff, uint16_t len)
+{  
+  HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_SET);
+  if (HAL_SPI_TransmitReceive_DMA(&hspi3, send_buff, read_buff, len) != HAL_OK)
+  {
+    PRINT_ERROR("spi slave transmit and receive dma failed\r\n");
+  }
+  HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_RESET);
+}
+
 /* ----------------------xl355 function------------------------------------*/
 int spi_write_byte(uint8_t addr, uint8_t data)
 {
@@ -1179,17 +1211,13 @@ int spi_read_multipe_bytes(uint8_t start_addr, uint8_t *rxdata, uint8_t len)
     HAL_GPIO_WritePin(XL355_SPI_CS_GPIO_Port, XL355_SPI_CS_Pin, GPIO_PIN_RESET);
     if (HAL_SPI_Transmit(&hspi1, &read_address, 1, 0xFF) != HAL_OK)
     {
-        memset(print_msg, 0x0, 256);
-        msg_len = snprintf((char *)print_msg, 256, "\r\nadxl355 WRITE register %u failed\r\n", start_addr);
-        HAL_UART_Transmit(&huart1, print_msg, msg_len, 1000);
+        PRINT_ERROR("\r\nadxl355 WRITE register %u failed\r\n", start_addr);
         HAL_GPIO_WritePin(XL355_SPI_CS_GPIO_Port, XL355_SPI_CS_Pin, GPIO_PIN_SET);
         return -1;
     }
     if (HAL_SPI_Receive(&hspi1, rxdata, len, 1000) != HAL_OK)
     {
-        memset(print_msg, 0x0, 256);
-        msg_len = snprintf((char *)print_msg, 256, "\r\nadxl355 read %u bytes from register %u failed\r\n", len, start_addr);
-        HAL_UART_Transmit(&huart1, print_msg, msg_len, 1000);
+        PRINT_ERROR("\r\nadxl355 read %u bytes from register %u failed\r\n", len, start_addr);
         HAL_GPIO_WritePin(XL355_SPI_CS_GPIO_Port, XL355_SPI_CS_Pin, GPIO_PIN_SET);
         return -1;
     }
@@ -1204,17 +1232,13 @@ int spi_write_multipe_bytes(uint8_t start_addr, uint8_t *txdata, uint8_t len)
     HAL_GPIO_WritePin(XL355_SPI_CS_GPIO_Port, XL355_SPI_CS_Pin, GPIO_PIN_RESET);
     if (HAL_SPI_Transmit(&hspi1, &write_address, 1, 0xFF) != HAL_OK)
     {
-        memset(print_msg, 0x0, 256);
-        msg_len = snprintf((char *)print_msg, 256, "\r\nadxl355 WRITE register %u failed\r\n", start_addr);
-        HAL_UART_Transmit(&huart1, print_msg, msg_len, 1000);
+        PRINT_ERROR("\r\nadxl355 WRITE register %u failed\r\n", start_addr);
         HAL_GPIO_WritePin(XL355_SPI_CS_GPIO_Port, XL355_SPI_CS_Pin, GPIO_PIN_SET);
         return -1;
     }
     if (HAL_SPI_Transmit(&hspi1, txdata, len, 0xFFF) != HAL_OK)
     {
-        memset(print_msg, 0x0, 256);
-        msg_len = snprintf((char *)print_msg, 256, "\r\nadxl355 write %u bytes to register %u failed\r\n", len, start_addr);
-        HAL_UART_Transmit(&huart1, print_msg, msg_len, 1000);
+        PRINT_ERROR("\r\nadxl355 write %u bytes to register %u failed\r\n", len, start_addr);
         HAL_GPIO_WritePin(XL355_SPI_CS_GPIO_Port, XL355_SPI_CS_Pin, GPIO_PIN_SET);
         return -1;
     }
