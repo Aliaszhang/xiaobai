@@ -6,3 +6,10 @@
 *.hex
 *.axf
 *.d
+MDK-ARM/DebugConfig/*
+MDK-ARM/stm32f103vct6_spi/*
+MDK-ARM/*.txt
+MDK-ARM/*.scvd
+MDK-ARM/*.lst
+MDK-ARM/*.s
+MDK-ARM/*.abc
