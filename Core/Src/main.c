@@ -784,7 +784,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi3.Init.CRCPolynomial = 10;
+  hspi3.Init.CRCPolynomial = 0;
   if (HAL_SPI_Init(&hspi3) != HAL_OK)
   {
     Error_Handler();
@@ -1151,6 +1151,7 @@ int spi_slave_read_multiple_bytes(uint8_t *buf, uint16_t len)
     PRINT_ERROR("spi slave recive dma failed\r\n");
   }
   HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_RESET);
+	return 0;
 }
 int spi_slave_write_multiple_bytes(uint8_t *buf, uint16_t len)
 {
@@ -1160,6 +1161,7 @@ int spi_slave_write_multiple_bytes(uint8_t *buf, uint16_t len)
     PRINT_ERROR("spi slave transmit dma failed\r\n");
   }
   HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_RESET);
+	return 0;
 }
 int spi_slave_read_write_multiple_bytes(uint8_t *send_buff, uint8_t *read_buff, uint16_t len)
 {  
@@ -1169,6 +1171,7 @@ int spi_slave_read_write_multiple_bytes(uint8_t *send_buff, uint8_t *read_buff, 
     PRINT_ERROR("spi slave transmit and receive dma failed\r\n");
   }
   HAL_GPIO_WritePin(SPI3_INT_GPIO_Port, SPI3_INT_Pin, GPIO_PIN_RESET);
+	return 0;
 }
 
 /* ----------------------xl355 function------------------------------------*/
