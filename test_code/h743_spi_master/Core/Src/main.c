@@ -36,10 +36,10 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define UART_RX_MAX_LEN (3000u)
-// 震动数据接收缓存，每个点9bytes, 收满500个点发�?�一次数�???????
+// 震动数据接收缓存，每个点9bytes, 收满500个点发�?�一次数�??????????
 #define XL355_SAMPLE_COUNT      (90 * 50)
 #define PACK_LEN	(19)
-// 200是为添加的包头和校验码留的空�???????
+// 200是为添加的包头和校验码留的空�??????????
 #define  ARRAYSIZE         (XL355_SAMPLE_COUNT + 200)
 
 typedef enum {
@@ -76,7 +76,7 @@ uint8_t spi_send_buffer[ARRAYSIZE] = {"SUCCESS"};
 const uint16_t recv_len = (XL355_SAMPLE_COUNT + PACK_LEN);
 // 发�?�震动数据的buffer
 uint8_t sensor_data[ARRAYSIZE] = {0};
-// 从xl355寄存器读�???????次温度传感器�??????? xyz 3轴的震动数据用的buffer
+// 从xl355寄存器读�??????????次温度传感器�?????????? xyz 3轴的震动数据用的buffer
 uint8_t spi_read_reg_array[12] = {0};
 
 int xl355_fifo_full_flag = 0;
@@ -127,6 +127,7 @@ int main(void)
 	int i;
 	int data_len;
 	float x,y,z;
+	uint32_t succ_count = 0, fail_count = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -158,6 +159,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+//  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
   while (1)
   {
     /* USER CODE END WHILE */
@@ -172,6 +174,7 @@ int main(void)
 		  if (ret != HAL_OK)
 		  {
 			  PRINT_BIN("SPI SEND FAIL:%d\r\n", ret);
+			  fail_count++;
 		  }
 		  else
 		  {
@@ -180,18 +183,20 @@ int main(void)
 			  if (data_len < 0)
 			  {
 				  PRINT_BIN("sensor data len error\r\n");
+				  fail_count++;
 			  }
 			  else
 			  {
 				  i = 0;
+				  succ_count++;
 //				  for (i = 0; i < data_len; i+=9)
 				  {
-//					  if ((sensor_data[i+2] & 0x01) == 0x01)
+					  if ((sensor_data[i+2] & 0x01) == 0x01)
 					  {
 						  x = adxl355_conversion_acc_data(&sensor_data[i]);
 						  y = adxl355_conversion_acc_data(&sensor_data[i+3]);
 						  z = adxl355_conversion_acc_data(&sensor_data[i+6]);
-						  PRINT_BIN("[%04d]accx:%0.2f\t accy:%0.2f\t accz:%0.2f\r\n", i, x, y, z);
+						  PRINT_BIN("[%u]accx:%0.2f\t accy:%0.2f\t accz:%0.2f[%u]\r\n", succ_count, x, y, z, fail_count);
 					  }
 				  }
 			  }
@@ -237,7 +242,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLM = 5;
   RCC_OscInitStruct.PLL.PLLN = 192;
   RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 120;
+  RCC_OscInitStruct.PLL.PLLQ = 8;
   RCC_OscInitStruct.PLL.PLLR = 5;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_2;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
@@ -290,10 +295,10 @@ static void MX_SPI2_Init(void)
   hspi2.Init.Mode = SPI_MODE_MASTER;
   hspi2.Init.Direction = SPI_DIRECTION_2LINES;
   hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi2.Init.CLKPolarity = SPI_POLARITY_HIGH;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
