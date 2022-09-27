@@ -60,8 +60,8 @@ all: main-build
 main-build: h743_spi_master.elf secondary-outputs
 
 # Tool invocations
-h743_spi_master.elf h743_spi_master.map: $(OBJS) $(USER_OBJS) F:\stm32_workspace\h743_spi_master\STM32H743IITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "h743_spi_master.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"F:\stm32_workspace\h743_spi_master\STM32H743IITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="h743_spi_master.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -Wl,--end-group
+h743_spi_master.elf h743_spi_master.map: $(OBJS) $(USER_OBJS) D:\keil_workspace\stm32f103vct6_spi\test_code\h743_spi_master\STM32H743IITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "h743_spi_master.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"D:\keil_workspace\stm32f103vct6_spi\test_code\h743_spi_master\STM32H743IITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="h743_spi_master.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
