@@ -249,7 +249,6 @@ int spi_slave_read_write_multiple_bytes(uint8_t *send_buff, uint8_t *read_buff, 
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  int i;
   int count = 0; // 接收数据计数，满4500清零（10*50*9）
   int package_len = 0;
 	HAL_StatusTypeDef ret;
@@ -291,7 +290,7 @@ int main(void)
 	get_chip_serial_num();
 
 	/* printf CPU unique device id */
-  PRINT_INFO("The CPU Unique Device ID:[%X-%X-%X]\r\n", int_device_serial[2], int_device_serial[1], int_device_serial[0]);
+    PRINT_INFO("The CPU Unique Device ID:[%X-%X-%X]\r\n", int_device_serial[2], int_device_serial[1], int_device_serial[0]);
 
 	/* get chip memery info */
 	get_chip_memery_info();
@@ -301,27 +300,27 @@ int main(void)
 
 	HAL_ADCEx_Calibration_Start(&hadc1);
 
-  ubx_reset();
-  HAL_Delay(100);  // wait for UBX start work
-  HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
-	ubx_init();
+    ubx_reset();
+    HAL_Delay(100);  // wait for UBX start work
+    HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
+    ubx_init();
 
-  adxl355_init(XL355_RANGE_2G, XL355_ODR_2000HZ, XL355_FIFO_SAMPLE_90, XL355_EXT_SYNC01);
-  
-  HAL_ADC_Start_DMA(&hadc1,(uint32_t*)&adc_value, 70);
-  adxl355_start_work();
+    adxl355_init(XL355_RANGE_2G, XL355_ODR_2000HZ, XL355_FIFO_SAMPLE_90, XL355_EXT_SYNC01);
 
-  log_print();
+    HAL_ADC_Start_DMA(&hadc1,(uint32_t*)&adc_value, 70);
+    adxl355_start_work();
 
-  memset(&sys_run, 0, sizeof(sys_run_mark_t));
-  memset(spi_send_array, 0x0, ARRAYSIZE);
-  xl355_fifo_full_flag = 0;
-  count = 0;
+    log_print();
 
-  memset(&ubx_rx_buffer, 0x0, sizeof(uart_rx_t));
-  memset(&gs_gnss_info, 0x0, sizeof(gnss_info_t));
-  HAL_UART_Receive_DMA(&huart2, ubx_rx_buffer.buffer, UART_RX_MAX_LEN - 1);
-  __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
+    memset(&sys_run, 0, sizeof(sys_run_mark_t));
+    memset(spi_send_array, 0x0, ARRAYSIZE);
+    xl355_fifo_full_flag = 0;
+    count = 0;
+
+    memset(&ubx_rx_buffer, 0x0, sizeof(uart_rx_t));
+    memset(&gs_gnss_info, 0x0, sizeof(gnss_info_t));
+    HAL_UART_Receive_DMA(&huart2, ubx_rx_buffer.buffer, UART_RX_MAX_LEN - 1);
+    __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
 	
 	while(1)
 	{
@@ -349,33 +348,33 @@ int main(void)
       } 
 #endif
 							
-			count += XL355_FIFO_SAMPLE_90;
-			if (count >= XL355_SAMPLE_COUNT)
-			{
-        // send data
-				memset(spi_send_array_bak, 0x0, ARRAYSIZE);
-        package_len = package_xl355_raw_data(spi_send_array, spi_send_array_bak, count);
+		count += XL355_FIFO_SAMPLE_90;
+		if (count >= XL355_SAMPLE_COUNT)
+		{
+            // send data
+            memset(spi_send_array_bak, 0x0, ARRAYSIZE);
+            package_len = package_xl355_raw_data(spi_send_array, spi_send_array_bak, count);
 
-        if (package_len > 0)
-        {
-          // HAL_UART_Transmit_DMA(&huart3, spi_send_array_bak, package_len);
-          spi_slave_write_multiple_bytes(spi_send_array_bak, package_len);
-        }
+            if (package_len > 19)
+            {
+                HAL_UART_Transmit_DMA(&huart3, spi_send_array_bak, package_len);
+                spi_slave_write_multiple_bytes(spi_send_array_bak, package_len);
+            }
 
-				memset(spi_send_array, 0x0, ARRAYSIZE);
-        count = 0 ;
+			memset(spi_send_array, 0x0, ARRAYSIZE);
+            count = 0 ;
 
-        sys_run.unix_timestamp_second =  get_unix_timestamp();
-        sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
+            sys_run.unix_timestamp_second =  get_unix_timestamp();
+            sys_run.unix_timestamp_micro_second =  (sys_run.time_5ms_count % 200) * 5 * 1000;
 
-        PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355 accx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, \
-            adxl355_conversion_acc_data(&spi_send_array_bak[15]), \
-            adxl355_conversion_acc_data(&spi_send_array_bak[18]), \
-            adxl355_conversion_acc_data(&spi_send_array_bak[21]));
+            PRINT_DEBUG("xl355_fifo_full_flag: %d\tadxl355 accx%0.2f\t\taccy:%0.2f\t\taccz:%0.2f\r\n", xl355_fifo_full_flag, \
+                adxl355_conversion_acc_data(&spi_send_array_bak[15]), \
+                adxl355_conversion_acc_data(&spi_send_array_bak[18]), \
+                adxl355_conversion_acc_data(&spi_send_array_bak[21]));
 
-        HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
-			}
-			xl355_fifo_full_flag = 0;
+            HAL_GPIO_TogglePin(WATCHDOG_GPIO_Port, WATCHDOG_Pin); // feed watchdog
+		}
+		xl355_fifo_full_flag = 0;
     }
 
     // 秒脉冲处理
